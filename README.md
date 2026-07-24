@@ -37,7 +37,7 @@ degrades gracefully without them (those specific bonus options simply won't be o
 - [EbonsContentMod](https://www.nexusmods.com/pathfinderwrathoftherighteous) (adds Goblin,
   Drow, Hobgoblin, Fetchling, Suli, Duergar, Ganzi as playable races)
 - [Swashbuckler](https://github.com/novumvita/SwashbucklerWOTR) (Panache / Charmed Life bonuses)
-- MicroscopicContentExpansion (Antipaladin cruelty bonus)
+- [MicroscopicContentExpansion](https://github.com/alterasc/MicroscopicContentExpansion) (Antipaladin cruelty bonus)
 
 ## Uninstalling cleanly
 
