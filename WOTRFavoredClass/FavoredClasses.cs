@@ -368,14 +368,17 @@ namespace WOTRFavoredClass
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b27")] = (4, BonusDisplayKind.Flat);
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b29")] = (4, BonusDisplayKind.Flat);
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2b")] = (1, BonusDisplayKind.Flat);
-            // "1/6 of a new X" wrapper selections (Wave 4).
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2d")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b30")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b33")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b36")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b39")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3c")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3f")] = (6, BonusDisplayKind.Feats);
+            // "1/6 of a new X" wrapper selections (Wave 4). Keyed on each entry's
+            // ProgressGuid, not FeatureGuid — the ProgressGuid feature is the one
+            // carrying PrerequisiteRankProgressDisplay and visible in Special
+            // Abilities, matching WpFeat/MagicalTail/TeamworkFeat/Cruelty above.
+            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2e")] = (6, BonusDisplayKind.Feats);
+            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b31")] = (6, BonusDisplayKind.Feats);
+            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b34")] = (6, BonusDisplayKind.Feats);
+            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b37")] = (6, BonusDisplayKind.Feats);
+            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3a")] = (6, BonusDisplayKind.Feats);
+            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3d")] = (6, BonusDisplayKind.Feats);
+            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b40")] = (6, BonusDisplayKind.Feats);
             // Wave 5: concentration, maneuvers, damage, resistance, studied target,
             // third-party pools, companion saves, teamwork/cruelty wrappers, monk speed.
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b42")] = (1, BonusDisplayKind.Flat);

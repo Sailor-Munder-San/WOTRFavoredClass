@@ -2,11 +2,21 @@
   "Id": "WOTRFavoredClass",
   "DisplayName": "Favored Class (WOTR port)",
   "Author": "Lordi (port of Holic75's ZFavoredClass)",
-  "Version": "0.1.0",
+  "Version": "0.1.1",
   "ManagerVersion": "0.23.4",
   "GameVersion": "2.7.0",
-  "Requirements": [ "DragonLibrary" ],
-  "LoadAfter": [ "DragonLibrary", "TabletopTweaks-Core", "TabletopTweaks-Base", "PrestigePlus", "Swashbuckler", "MicroscopicContentExpansion", "EbonsContentMod" ],
+  "Requirements": [
+    "DragonLibrary"
+  ],
+  "LoadAfter": [
+    "DragonLibrary",
+    "TabletopTweaks-Core",
+    "TabletopTweaks-Base",
+    "PrestigePlus",
+    "Swashbuckler",
+    "MicroscopicContentExpansion",
+    "EbonsContentMod"
+  ],
   "AssemblyName": "WOTRFavoredClass.dll",
   "EntryMethod": "WOTRFavoredClass.Main.Load"
 }

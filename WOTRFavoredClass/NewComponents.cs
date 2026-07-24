@@ -112,15 +112,32 @@ namespace WOTRFavoredClass
             if (part == null) return;
             var attacker = evt.Initiator;
             if (attacker == null) return;
-            bool favored = part.Entries.Any(e =>
-                e.CheckedFeatures.Any(p => p != null && attacker.Descriptor.HasFact(p)));
-            if (favored)
+            if (FavoredEnemyCheck.IsFavored(part, attacker))
             {
                 evt.AddModifier(bonus, Fact, ModifierDescriptor.Dodge);
             }
         }
 
         public void OnEventDidTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt) { }
+    }
+
+    // Shared favored-enemy match check for the three components below — plain loops
+    // (no LINQ/closures) since RuleCalculateAC/RuleCalculateAttackBonus/
+    // RuleAttackWithWeapon fire on every attack roll and AC calculation in combat.
+    internal static class FavoredEnemyCheck
+    {
+        public static bool IsFavored(Kingmaker.UnitLogic.Parts.UnitPartFavoredEnemy part, UnitEntityData target)
+        {
+            if (part == null || target == null) return false;
+            foreach (var entry in part.Entries)
+            {
+                foreach (var feature in entry.CheckedFeatures)
+                {
+                    if (feature != null && target.Descriptor.HasFact(feature)) return true;
+                }
+            }
+            return false;
+        }
     }
 
     // Rank-scaled resource-pool bonus: adds Fact.GetRank() to the max amount of the
@@ -267,7 +284,7 @@ namespace WOTRFavoredClass
         public int GetStaticConcentrationBonus(EntityFactComponent runtime)
         {
             var fact = runtime?.Fact;
-            return fact != null ? fact.GetRank() / System.Math.Max(1, Divisor) : 0;
+            return fact != null ? fact.GetRank() / Divisor : 0;
         }
     }
 
@@ -290,11 +307,12 @@ namespace WOTRFavoredClass
             if (bonus <= 0) return;
             var srcAbility = evt.Reason.Context?.SourceAbility;
             if (srcAbility == null) return;
-            bool match = m_Abilities.Any(r =>
+            bool match = false;
+            for (int i = 0; i < m_Abilities.Length; i++)
             {
-                var bp = r.Get();
-                return bp != null && (bp == srcAbility || bp == srcAbility.Parent);
-            });
+                var bp = m_Abilities[i].Get();
+                if (bp != null && (bp == srcAbility || bp == srcAbility.Parent)) { match = true; break; }
+            }
             if (!match) return;
             foreach (var dmg in evt.DamageBundle)
             {
@@ -382,9 +400,7 @@ namespace WOTRFavoredClass
             if (part == null) return;
             var target = evt.Target;
             if (target == null) return;
-            bool favored = part.Entries.Any(e =>
-                e.CheckedFeatures.Any(p => p != null && target.Descriptor.HasFact(p)));
-            if (favored)
+            if (FavoredEnemyCheck.IsFavored(part, target))
             {
                 evt.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable);
             }
@@ -412,9 +428,7 @@ namespace WOTRFavoredClass
             if (part == null) return;
             var target = evt.Target;
             if (target == null) return;
-            bool favored = part.Entries.Any(e =>
-                e.CheckedFeatures.Any(p => p != null && target.Descriptor.HasFact(p)));
-            if (favored)
+            if (FavoredEnemyCheck.IsFavored(part, target))
             {
                 evt.AddTemporaryModifier(evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
             }
@@ -444,9 +458,19 @@ namespace WOTRFavoredClass
             if (bonus <= 0) return;
             var attacker = evt.Initiator;
             if (attacker == null) return;
-            bool marked = attacker.Buffs.Enumerable.Any(b =>
-                b.Context?.MaybeCaster == Owner &&
-                m_Buffs.Any(r => r.Get() == b.Blueprint));
+            // Plain nested loops, no LINQ/closures: this walks the ATTACKER's full buff
+            // list on every AC calculation in combat, typically the largest collection
+            // among this mod's hot-path checks.
+            bool marked = false;
+            foreach (var buff in attacker.Buffs.Enumerable)
+            {
+                if (buff.Context?.MaybeCaster != Owner) continue;
+                for (int i = 0; i < m_Buffs.Length; i++)
+                {
+                    if (m_Buffs[i].Get() == buff.Blueprint) { marked = true; break; }
+                }
+                if (marked) break;
+            }
             if (marked)
             {
                 evt.AddModifier(bonus, Fact, ModifierDescriptor.Dodge);
@@ -476,6 +500,18 @@ namespace WOTRFavoredClass
             }
         }
 
+        // Mirrors OnTurnOn: if the owner's counter is ever deactivated without being
+        // fully removed (e.g. TabletopTweaks-Base's manual feature-suppression
+        // toggle), the pet must not keep the granted feature indefinitely.
+        public override void OnTurnOff()
+        {
+            base.OnTurnOff();
+            foreach (var petRef in Owner.Pets)
+            {
+                TryRevoke(petRef.Entity);
+            }
+        }
+
         void TryGrant(UnitEntityData pet)
         {
             if (pet == null) return;
@@ -483,6 +519,15 @@ namespace WOTRFavoredClass
             if (bp == null || pet.Descriptor.HasFact(bp)) return;
             var source = (FeatureSource)BlueprintCore.Utils.BlueprintTool.Get<BlueprintProgression>(FavoredClasses.SourceMarkerGuid);
             pet.Descriptor.AddFact<Feature>(bp)?.SetSource(source, 1);
+        }
+
+        void TryRevoke(UnitEntityData pet)
+        {
+            if (pet == null) return;
+            var bp = m_Feature?.Get() as BlueprintFeature;
+            if (bp == null) return;
+            var fact = pet.Descriptor.Facts.m_Facts.FirstOrDefault(f => f.Blueprint == bp);
+            if (fact != null) pet.Descriptor.Facts.Remove(fact);
         }
 
         public void HandleAddCompanion(UnitEntityData unit)
