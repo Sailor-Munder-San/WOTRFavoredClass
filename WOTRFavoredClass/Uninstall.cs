@@ -40,7 +40,7 @@ namespace WOTRFavoredClass
                 foreach (var fact in d.Facts.m_Facts)
                 {
                     var bp = fact?.Blueprint;
-                    if (bp != null && FavoredClasses.AllModGuids.Contains(bp.AssetGuid.ToString()))
+                    if (bp != null && FavoredClasses.AllModBlueprintGuids.Contains(bp.AssetGuid))
                         toRemove.Add(fact);
                 }
                 foreach (var fact in toRemove)
@@ -56,7 +56,7 @@ namespace WOTRFavoredClass
 
                 var progressions = d.Progression.m_Progressions;
                 foreach (var key in progressions.Keys
-                             .Where(k => FavoredClasses.AllModGuids.Contains(k.AssetGuid.ToString())).ToList())
+                             .Where(k => FavoredClasses.AllModBlueprintGuids.Contains(k.AssetGuid)).ToList())
                 {
                     progressions.Remove(key);
                     progCount++;
@@ -64,7 +64,7 @@ namespace WOTRFavoredClass
 
                 var selections = d.Progression.m_Selections;
                 foreach (var key in selections.Keys
-                             .Where(k => FavoredClasses.AllModGuids.Contains(k.AssetGuid.ToString())).ToList())
+                             .Where(k => FavoredClasses.AllModBlueprintGuids.Contains(k.AssetGuid)).ToList())
                 {
                     selections.Remove(key);
                     selCount++;

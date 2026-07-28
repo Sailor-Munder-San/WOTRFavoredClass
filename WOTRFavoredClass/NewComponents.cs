@@ -16,10 +16,10 @@ using Kingmaker.PubSubSystem;
 using Kingmaker.RuleSystem.Rules;
 using Kingmaker.RuleSystem.Rules.Abilities;
 using Kingmaker.RuleSystem.Rules.Damage;
+using Kingmaker.UnitLogic.Buffs.Blueprints;
 using Kingmaker.UnitLogic;
 using Kingmaker.UnitLogic.Abilities.Blueprints;
 using Kingmaker.UnitLogic.Abilities.Components;
-using Kingmaker.UnitLogic.Buffs.Blueprints;
 using Kingmaker.UnitLogic.Class.LevelUp;
 using Kingmaker.UnitLogic.Parts;
 
@@ -47,7 +47,11 @@ namespace WOTRFavoredClass
             }
             else
             {
-                var comp = evt.Spell.GetComponents<SpellComponent>().FirstOrDefault();
+                // Plain loop, no LINQ: matches this file's hot-path convention (see
+                // FavoredEnemyCheck below) — grabs the first SpellComponent, same as
+                // FirstOrDefault() did, without an extension-method call per cast.
+                SpellComponent comp = null;
+                foreach (var c in evt.Spell.GetComponents<SpellComponent>()) { comp = c; break; }
                 if (comp != null) match = comp.School == School;
             }
             if (match)
@@ -81,7 +85,11 @@ namespace WOTRFavoredClass
             }
             else
             {
-                var comp = evt.Spell.GetComponents<SpellComponent>().FirstOrDefault();
+                // Plain loop, no LINQ: matches this file's hot-path convention (see
+                // FavoredEnemyCheck below) — grabs the first SpellComponent, same as
+                // FirstOrDefault() did, without an extension-method call per cast.
+                SpellComponent comp = null;
+                foreach (var c in evt.Spell.GetComponents<SpellComponent>()) { comp = c; break; }
                 if (comp != null) match = comp.School == School;
             }
             if (match)
@@ -478,6 +486,170 @@ namespace WOTRFavoredClass
         }
 
         public void OnEventDidTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt) { }
+    }
+
+    // Flat healing bonus per rank for a whitelisted set of abilities (paladin lay on
+    // hands). RuleHealDamage.AdditionalBonus is the native flat-bonus channel — the
+    // engine folds it in as (Bonus + AdditionalBonus) before multipliers, so this
+    // stacks additively with the ability's own healing exactly like the tabletop
+    // "+1/2 hit point to lay on hands" wording. SelfOnly implements the tiefling
+    // variant's "but only when the paladin uses that ability on herself" by comparing
+    // the heal target to the owner, rather than hard-coding the self-cast ability.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a11")]
+    public class HealBonusForAbilitiesPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RuleHealDamage>, IRulebookHandler<RuleHealDamage>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        public BlueprintAbilityReference[] m_Abilities = new BlueprintAbilityReference[0];
+        public bool SelfOnly;
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(RuleHealDamage evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            if (SelfOnly && evt.Target != Owner) return;
+            var srcAbility = evt.Reason.Context?.SourceAbility;
+            if (srcAbility == null) return;
+            for (int i = 0; i < m_Abilities.Length; i++)
+            {
+                var bp = m_Abilities[i].Get();
+                if (bp != null && (bp == srcAbility || bp == srcAbility.Parent))
+                {
+                    evt.AdditionalBonus.Add(ModifierDescriptor.UntypedStackable, bonus);
+                    return;
+                }
+            }
+        }
+
+        public void OnEventDidTrigger(RuleHealDamage evt) { }
+    }
+
+    // Natural armor bonus per rank that applies only while a qualifying form is
+    // active: either one of the explicitly listed buffs (alchemist mutagen /
+    // cognatogen) or any polymorph buff (druid wild shape). Polymorph is detected by
+    // the presence of the native Polymorph buff component rather than an enumerated
+    // form list, so every wild shape form — including ones added by other mods —
+    // counts. Blueprint lookups are cached per blueprint guid because this runs on
+    // every AC calculation in combat.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a12")]
+    public class NaturalACWhileTransformedPerRank : UnitFactComponentDelegate,
+        ITargetRulebookHandler<Kingmaker.RuleSystem.Rules.RuleCalculateAC>,
+        IRulebookHandler<Kingmaker.RuleSystem.Rules.RuleCalculateAC>,
+        ISubscriber, ITargetRulebookSubscriber
+    {
+        public BlueprintBuffReference[] m_Buffs = new BlueprintBuffReference[0];
+        public bool AnyPolymorph;
+        public int Divisor = 1;
+
+        // blueprint guid -> does this buff blueprint carry a Polymorph component.
+        // Static, never serialized: pure lookup memoization of immutable blueprint data.
+        static readonly Dictionary<BlueprintGuid, bool> PolymorphCache = new();
+
+        static bool IsPolymorphBuff(BlueprintBuff bp)
+        {
+            if (bp == null) return false;
+            if (PolymorphCache.TryGetValue(bp.AssetGuid, out var known)) return known;
+            bool isPolymorph = false;
+            foreach (var comp in bp.ComponentsArray)
+            {
+                if (comp is Kingmaker.UnitLogic.Buffs.Polymorph) { isPolymorph = true; break; }
+            }
+            PolymorphCache[bp.AssetGuid] = isPolymorph;
+            return isPolymorph;
+        }
+
+        bool IsTransformed()
+        {
+            foreach (var buff in Owner.Buffs.Enumerable)
+            {
+                var bp = buff.Blueprint;
+                if (bp == null) continue;
+                if (AnyPolymorph && IsPolymorphBuff(bp)) return true;
+                for (int i = 0; i < m_Buffs.Length; i++)
+                {
+                    if (m_Buffs[i].Get() == bp) return true;
+                }
+            }
+            return false;
+        }
+
+        public void OnEventAboutToTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            if (!IsTransformed()) return;
+            evt.AddModifier(bonus, Fact, ModifierDescriptor.NaturalArmor);
+        }
+
+        public void OnEventDidTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt) { }
+    }
+
+    // Restores extra points of a resource on rest, on top of whatever the class's own
+    // rest logic already restored. WOTR has no "points regained per day" field on
+    // BlueprintAbilityResource (only the maximum), so the arcanist's partial reservoir
+    // refill is driven by rest triggers — this rides the same native IUnitRestHandler
+    // event AddRestTrigger uses and simply tops the pool up further. Restore() clamps
+    // to the maximum, so if a class ever refills fully this is harmlessly inert.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a13")]
+    public class RestoreResourceOnRestPerRank : UnitFactComponentDelegate,
+        IUnitRestHandler, IGlobalSubscriber, ISubscriber
+    {
+        public BlueprintAbilityResourceReference m_Resource;
+        public int Divisor = 1;
+
+        public void HandleUnitRest(UnitEntityData unit)
+        {
+            if (unit?.Descriptor != Owner) return;
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var resource = m_Resource?.Get();
+            if (resource == null) return;
+            Owner.Resources.Restore(resource, bonus);
+        }
+    }
+
+    // +1 caster level per rank when casting one of the character's patron spells.
+    // A witch's patron is a progression that grants its spells through AddKnownSpell
+    // components, so the patron -> spell mapping is read out of the patron
+    // progressions themselves at install time (see FavoredClasses.PatronSpells)
+    // rather than hard-coded. The hot path costs one hash lookup for the overwhelming
+    // majority of casts, which are not patron spells at all.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a14")]
+    public class PatronSpellCasterLevelPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RuleCalculateAbilityParams>, IRulebookHandler<RuleCalculateAbilityParams>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(RuleCalculateAbilityParams evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var spell = evt.Spell;
+            if (spell == null) return;
+            // Cheap reject first: almost every cast is not a patron spell anywhere.
+            if (!FavoredClasses.AnyPatronSpell.Contains(spell.AssetGuid)) return;
+            // It is SOME patron's spell — now confirm it belongs to THIS character's
+            // patron, so a witch does not get the bonus for another patron's spell she
+            // happens to know by other means.
+            foreach (var entry in FavoredClasses.PatronSpells)
+            {
+                if (!entry.Value.Contains(spell.AssetGuid)) continue;
+                var patron = entry.Key.Get();
+                if (patron != null && Owner.Progression.m_Progressions.ContainsKey(patron))
+                {
+                    evt.AddBonusCasterLevel(bonus, ModifierDescriptor.UntypedStackable);
+                    return;
+                }
+            }
+        }
+
+        public void OnEventDidTrigger(RuleCalculateAbilityParams evt) { }
     }
 
     // Keeps the referenced feature present on the owner's animal companions while

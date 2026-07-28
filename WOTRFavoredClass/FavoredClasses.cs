@@ -5,13 +5,16 @@ using BlueprintCore.Blueprints.Configurators.Classes;
 using BlueprintCore.Blueprints.Configurators.Classes.Selection;
 using BlueprintCore.Blueprints.CustomConfigurators.Classes;
 using BlueprintCore.Blueprints.CustomConfigurators.Classes.Selection;
+using BlueprintCore.Blueprints.CustomConfigurators.Classes.Spells;
 using BlueprintCore.Utils;
 using BlueprintCore.Utils.Types;
 using Kingmaker.Blueprints;
 using Kingmaker.Blueprints.Classes;
 using Kingmaker.Blueprints.Classes.Selection;
+using Kingmaker.Blueprints.Classes.Spells;
 using Kingmaker.Blueprints.Root;
 using Kingmaker.EntitySystem.Stats;
+using Kingmaker.UnitLogic.Abilities.Blueprints;
 
 namespace WOTRFavoredClass
 {
@@ -77,6 +80,7 @@ namespace WOTRFavoredClass
         private const string DrowRaceGuid = "5d357ab2ba684b76b7f13e8f3fe441c4";
         private const string SuliRaceGuid = "d5398269cc1442d7802469cbe7fdf151";
         private const string DuergarRaceGuid = "ac2584f867f24c8499b8c77572dd4a61";
+        private const string GanziRaceGuid = "14be0c2967a842febd853380ad785ce5";
 
         // Classes
         private const string BarbarianClassGuid = "f7d7eb166b3dd594fb330d085df41853";
@@ -154,6 +158,192 @@ namespace WOTRFavoredClass
         private const string KineticistWildTalentRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3e";
         private const string MagusArcanaRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b41";
 
+        // Wave 6 (bonus known spells): custom filtered/combined spell lists for the
+        // two race-specific variants, built once at Install() by reading native
+        // class lists' SpellsByLevel and filtering in plain C# (same technique real
+        // WOTR mods use — PrestigePlus GraveSpellList.cs, EbonsContentMod
+        // FaithMagic.cs — rather than ZFC's Kingmaker-only Common.combineSpellLists).
+        private const string GanziOracleSpellListGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b71";
+        private const string GoblinSorcererSpellListGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b72";
+        private const string ShamanKnownSpellListGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba6";
+
+        // Per-level parametrized-feature guids, one literal array per FCB entry
+        // (independently-generated — NOT derived via MergeIds/XOR: every guid in this
+        // whole file already shares the same "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bXX" prefix,
+        // so XOR-ing two of them together cancels that shared prefix to zero and
+        // collapses to "prefix + xor-of-last-bytes", which collided with an existing
+        // constant in testing — MergeIds is only safe against a high-entropy foreign
+        // guid, e.g. a vanilla class guid, which is what its other use in this file does).
+        private static readonly string[] AlchemistKnownSpellLevelGuids = { "3200f165d71a4bc2a15d8d777e8bbd1e", "19788ba42ade4fe88b725ee5e31942b1", "783b922e08454720848d9c30d6e2b14e", "9acedbd416f1419c8f14c90b4b7f82dd", "189c87c652a248729477179933b5ff23" };
+        private static readonly string[] BardKnownSpellLevelGuids = { "4f7cca11374a493fb4a2adf453d8ab4c", "748a09904a7446fbb0a68a3641528080", "b3daa07db6c54d478b16f376452b5e81", "4ce55f4787774566983e5c5ace5c88b0", "ddf0451d094442f8a24d73cc266fce5f" };
+        private static readonly string[] InquisitorKnownSpellLevelGuids = { "894f9e6e33bd453c8fe2d447faf12f8f", "7a086526a0864b7082d9df9ddac41e8a", "8d1c79853e52449e9685d554522cbf91", "4ec953c82f814dc9bfb9a5a9569ab716", "cfb7cac98bad4ecfa7a4b799e534c8c3" };
+        private static readonly string[] OracleKnownSpellLevelGuids = { "2bc5c1b5c9a443b99b1eeed5268335b1", "b521fc4dcff043edbf87a5de4801e4e3", "08857e8be02d47d2898c72dcf53ffd1e", "45a33c1babc948a5a6ebbb50e296b350", "b21d44f47f9249ecaafe511a0094fa9b", "45c9270e995241c693535d7466bdc650", "cfd3b9413e3f4dde8d64ab0ec340381b", "387e4f0d029a4bed827af0309247f158" };
+        private static readonly string[] OracleGanziKnownSpellLevelGuids = { "84348713728546f9856b26d2de153724", "868bb7bdea7940468000b18dba0c0684", "0ceeee8727ad4f24a29730ee84fa3a68", "d68140a8df214020a67365bb14d7b2d8", "7d65ea731ebb45aebe5aea93bcf7c315", "4eb23edec6384f60bb751c0c9ac6d64d", "074c5af22f69433ba4e2c07164f07d1e", "e7fd4090f3fc492c9835541d375ba913" };
+        private static readonly string[] ShamanKnownSpellLevelGuids = { "eddff04ca85c40d4b5acb908ab026967", "dec6e71a3c63469f89859ab84afd73a1", "4ffb2c7710bb4cf893b6e5adef345373", "4d090fbd852048bc996a88e73efc096c", "dfd8f818e2ca46f8822cfe04507b1fa3", "983a9d09140a446d93d24c2f94b2c5a6", "72284da4cda246c3a33eadcf936dd796", "85ac20256261461f931b1da395e1f30b" };
+        private static readonly string[] SorcererKnownSpellLevelGuids = { "7a6d3230f4de44f39823444dadf92fd1", "4a915b785b0c4b37bbfdc4ae21c11e1b", "b7f2de97ec034a9fab84fb2c658b48e0", "3ec44340abc74ee79f9d0ab6c04977ba", "be815ad8f7284f778c76b16bfe66ab4e", "12ade9261527452a903e6d978e050021", "31ccd1827d7c42ecb48ac625d7e59ec3", "afe2794b95284068a99c42a6ab225db0" };
+        private static readonly string[] SorcererGoblinKnownSpellLevelGuids = { "d8c3a01f517645d0bd2d958e92ddf434", "778c78300e254e1987df4b7056f8da79", "46df8360fa554ff88d383741d181ddfc", "1b74b4920688488dbad663f75c4ff0b9", "cc47112c43d34b708ddd9f88d4c8b35d", "e706f7c22d8f4855a065501a4888dfa2", "170b39b3a1934a8e8f36e641c6d58d03", "2581f00e8f404ec19cbe5e38625fdcfa" };
+        private static readonly string[] WizardKnownSpellLevelGuids = { "3dc6c03a61ac42b19a4d84c6979542b1", "5fa4469c45f84e52b364725160f9ffe8", "8a07aa06e2854824b94fc515aa925c3e", "47b3337f98bd4d6f978cf487a13f9862", "7cbeebfcc4d3407180660af2603d0179", "cd579f88d3ac440eac8c2eef096a8b9c", "c1304c60351242cfae46a1c23faa85e1", "78fd958f33d84d6699c3e903f0a235f6" };
+        private static readonly string[] WizardKnownSpellAbjurationLevelGuids = { "533d9f94b52f44b4b9590412d31841e2", "179f3ed5982d424fa063831e217b7531", "c2b6462b0ba447709f8cec571c411dfe", "d72d04ad6a0541f288213efe4db3f8b4", "4dad98ec4fb742dc9982cd23ca58aff1", "02941f60767744238660ead7590941b1", "ed41bf16fa3c4440914d6d1f96c605aa", "cc7ceee0110d496fa2395b35b1e72b77" };
+        private static readonly string[] WizardKnownSpellConjurationLevelGuids = { "7697165f855f4d4da12fd37e3538abba", "a8a5d0d65dd0411da8336de64433206d", "c43c1007338746c4a7a1a9efcfc46a7e", "f7629ce104b74775860695f9a2cc158d", "936f78b358e54b6f9b8b8b205c7be061", "daf71e0ab04449539680c70e69c67568", "5802c3ced97146409e8bf853d44514aa", "04d8c2ee1b8144e8a36076c36cef2212" };
+        private static readonly string[] WizardKnownSpellEnchantmentLevelGuids = { "cc1fe866f7104c8e801d8b9d60c755d4", "274cc4b2a2974848aab09af1a5b20a86", "eb07cc98807b45db857abe3a76f9c031", "ccc01a688792479f9a08af44d843501b", "f3f27c0ddad4493a914937e12dcd4067", "78b401e903e7473db50ea6c68faa7c3b", "304dd179a0064533925d15810da4d075", "8e5331807fb442d4b1d8840c78c0c576" };
+        private static readonly string[] WizardKnownSpellEvocationLevelGuids = { "f28da48860b745e0bf652fdbafea146b", "9a3e6b4d131d41928f4aef64a7f9b5cf", "3f5c1c2b185e4fa59b6dbe7bd5d073bf", "f7f6c4cb8f1144a395110e03f0811ab5", "110e9ee9d37f4475b9484b77355e94bd", "b27f769435834cfbab24bb7d6a79feca", "7a5e571174084c81b6c901705be8aebd", "8bd46c22f0574bab8ff08a9b82547bd4" };
+        private static readonly string[] WizardKnownSpellIllusionLevelGuids = { "20a0ba2985104a218ea99bb3ca7a73f5", "4fd41cfc019a4d1e8170c3134c68511f", "23d790fd24104ec5afb87290853d64ad", "55b80529416e4c0c93086eca3ee9a17e", "d6fe8267c3994b05b6bf2e61a7855e3d", "44e9a6f9531c42e681e766aa0dea3bad", "5909904af47b4a0782263e84fa880798", "b6e5e0b502a04c8084e8063f4f5bad6b" };
+        private static readonly string[] WizardKnownSpellNecromancyLevelGuids = { "a846ec451d46405db2c238526e9d5178", "b83226c9cd304203a9bdef5ff48772fa", "fe18ecb540154c8e9fc38b0393dd41b4", "ec18431dfcdf4228b36cb29312c518fe", "19dc672017384077aca1b3def09a73bb", "fb96c05105174011bf0f011b28248ffb", "1f6d5f97ab1941a4b574dfdd3eb4a0b4", "bb85e715f68e491b9759065cf8e772e8" };
+        private static readonly string[] WizardKnownSpellTransmutationLevelGuids = { "d2809720b22a49158c0380adbc6fb699", "3e66d89eaccb42ada6bc4ae47fd525cf", "4ff049011d8c44208eafb1e3236d0930", "5abae039ba2c4fd2b51a02f61600c86e", "c2c5c9a222e14dc28f08a8cdde4de790", "af622a9b560147539b0e43aac6aca2c2", "46a7d0ef0cba4682852a9425a61fa630", "1b261c13a91a4a809461005c279cb392" };
+        private static readonly string[] WitchKnownSpellLevelGuids = { "b370345bd9f14eebb0cc85ae99db3433", "5aa9b7ef502a478cb1bc460112b99a45", "59a5cb6ed72d4c0491979442fd0eb45f", "02b5cf3bf2d74a99b4d563d0cff14055", "031674c2fcb34c53a9d0cab8c834715a", "67f7df263fce4cb5851c4f59a3d204cf", "e5c5095f0cbf4e0f9ae07362f8e2c54f", "7a1609f6094341b0862bd5ea0e7c7026" };
+        private static readonly string[] SkaldKnownSpellLevelGuids = { "6b3d01b9d6f747d181f4f8926d3cf034", "f8c2a82dd13c4cb0998373868937a0ae", "98f37c8bc4f0463eb39374fb0e3a4e92", "af9495fad428431c9e1356e6cf3206a9", "e7efa501b4954e8aa4e3e2233c152ad2" };
+        private static readonly string[] ArcanistKnownSpellLevelGuids = { "aaec1142c8324464ab2655c643bb1661", "9ee845b331c44b0f991fd01316a6b313", "0864101e4a1f4a8db3b0dc1dbfc0cd88", "06e1f21852cc40c18e57c70ba67eed52", "0a8d94843fde4d67939d39e064a75cfc", "435876994e614e42b00131a4cc3c8cce", "9b7121153b794dc18a87e30589c38529", "16776b1733bb43d4a8d3a7620220d622" };
+
+        // Wizard's Thassilonian Specialist archetype (7 school variants) replaces the
+        // wizard's spellbook with a school-restricted one — confirmed via BlueprintCore's
+        // native FeatureReplaceSpellbookRefs/SpellListRefs. Rather than 7 separate FCB
+        // entries, the single Wizard "bonus known spell" reward selection carries one
+        // extra track per school (own level-guid array, gated on the matching archetype
+        // feature) alongside the generic track (gated OFF whenever any of the 7 apply).
+        private static readonly (string School, string[] LevelGuids, string ArchetypeFeatureGuid, string SpellListGuid)[] ThassilonianTracks =
+        {
+            ("Abjuration", WizardKnownSpellAbjurationLevelGuids, "15c681d5a76c1a742abe2760376ddf6d", "280dd5167ccafe449a33fbe93c7a875e"),
+            ("Conjuration", WizardKnownSpellConjurationLevelGuids, "1a258cd8e93461a4ab011c73a2c43dac", "5b154578f228c174bac546b6c29886ce"),
+            ("Enchantment", WizardKnownSpellEnchantmentLevelGuids, "e1ebc61a71c55054991863a5f6f6d2c2", "ac551db78c1baa34eb8edca088be13cb"),
+            ("Evocation", WizardKnownSpellEvocationLevelGuids, "5e33543285d1c3d49b55282cf466bef3", "17c0bfe5b7c8ac3449da655cdcaed4e7"),
+            ("Illusion", WizardKnownSpellIllusionLevelGuids, "aa271e69902044b47a8e62c4e58a9dcb", "c311aed33deb7a346ab715baef4a0572"),
+            ("Necromancy", WizardKnownSpellNecromancyLevelGuids, "fb343ede45ca1a84496c91c190a847ff", "5c08349132cb6b04181797f58ccf38ae"),
+            ("Transmutation", WizardKnownSpellTransmutationLevelGuids, "dd163630abbdace4e85284c55d269867", "f3a8f76b1d030a64084355ba3eea369a"),
+        };
+
+        // Arcanist archetypes confirmed (via BlueprintCore SpellbookRefs/SpellListRefs)
+        // to replace the arcanist's own spellbook with a dedicated one — excluded from
+        // the plain Arcanist "bonus known spell" FCB entirely (per-user ruling; unlike
+        // the Thassilonian case, these don't get their own dedicated FCB variant).
+        private static readonly string[] ArcanistKnownSpellExcludedArchetypes =
+        {
+            "44f3ba33839a87f48a66b2b9b2f7c69b", // Unlettered Arcanist
+            "26185cfb81b34e778ad370407300de9a", // Nature Mage
+            "5c77110cd0414e7eb4c2e485659c9a46", // Magic Deceiver
+        };
+
+        // Wave 6: "bonus known spell" wrapper triples (Feature/Progress/Reward).
+        private const string AlchemistKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b82";
+        private const string AlchemistKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b83";
+        private const string AlchemistKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b84";
+        private const string BardKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b85";
+        private const string BardKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b86";
+        private const string BardKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b87";
+        private const string InquisitorKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b88";
+        private const string InquisitorKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b89";
+        private const string InquisitorKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b8a";
+        private const string OracleKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b8b";
+        private const string OracleKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b8c";
+        private const string OracleKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b8d";
+        private const string OracleGanziKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b8e";
+        private const string OracleGanziKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b8f";
+        private const string OracleGanziKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b90";
+        private const string ShamanKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b91";
+        private const string ShamanKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b92";
+        private const string ShamanKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b93";
+        private const string SorcererKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b94";
+        private const string SorcererKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b95";
+        private const string SorcererKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b96";
+        private const string SorcererGoblinKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b97";
+        private const string SorcererGoblinKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b98";
+        private const string SorcererGoblinKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b99";
+        private const string WizardKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b9a";
+        private const string WizardKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b9b";
+        private const string WizardKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b9c";
+        private const string WitchKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b9d";
+        private const string WitchKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b9e";
+        private const string WitchKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b9f";
+        private const string SkaldKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba0";
+        private const string SkaldKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba1";
+        private const string SkaldKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba2";
+        private const string ArcanistKnownSpellFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba3";
+        private const string ArcanistKnownSpellProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba4";
+        private const string ArcanistKnownSpellRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba5";
+
+        // Wave 7: lay on hands, conditional natural armor, eldritch scion arcana,
+        // channel energy / fervor pools.
+        private const string LayOnHandsEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba7";
+        private const string LayOnHandsSelfEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba8";
+        private const string WildShapeACEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bab";
+        private const string ChannelEnergyEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb0";
+        private const string FervorEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb2";
+        private const string HarmUndeadEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb4";
+
+        // Wave 8: corrected favored enemy bonus, arcane reservoir regen, patron spell CL.
+        private const string FavoredEnemyPickFeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb6";
+        private const string FavoredEnemyPickProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb7";
+        private const string FavoredEnemyPickRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb8";
+        private const string ReservoirRegenEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb9";
+        private const string PatronCLEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bbb";
+        // XOR seed for deriving one reward feature per favored enemy type. Safe use of
+        // MergeIds: it is xored against the VANILLA favored-enemy feature guid, which
+        // is high-entropy and shares no prefix with ours.
+        private const string FavoredEnemyPickSeed = "3eb3fba584b8425b95fc4b643f5c1cd0";
+        private const string VanillaFavoriteEnemySel = "16cc2c937ea8d714193017780e7d4fc6";
+        private const string InstantEnemyBuffGuid = "82574f7d14a28e64fab8867fbaa17715";
+
+        // Channel energy / fervor favored class bonuses scale the MAGNITUDE of the
+        // healing or damage, not the number of uses per day (original README:
+        // "+1 bonus to channel energy healing or damage/3 levels"). Channel energy only
+        // ever deals damage in its harm-undead mode, so a damage bonus on the same
+        // ability list is exactly the aasimar cleric's "harm undead" bonus.
+        private static readonly string[] ChannelEnergyAbilityGuids =
+        {
+            "f5fc9a1a2a3c1a946a31b320d1dd31b2", // ChannelEnergy (cleric base; variants match via Parent)
+            "b5cf6b80e65ea724d99dc9f4f8874fc3", // WarpriestChannelEnergy
+            "6bcaf7636388f2a40bce263372735eef", // WarpriestShieldbearerChannelEnergy
+        };
+        private static readonly string[] FervorAbilityGuids =
+        {
+            "051eaf10f7fe97f49aaf87bdc68580bd", // WarpriestFervorPositiveAbility
+            "608a63ea6eec40bd8598c76965bf439c", // WarpriestFervorPositiveAbilityCast
+            "5542b984ed4e7a74eac305d3c2413e1d", // WarpriestFervorPositiveAbilitySelf
+            "44972136cbe45e441bd4a65dde725a3f", // WarpriestFervorNegativeAbility
+            "df91f64952884c56a163b4c511462e86", // WarpriestFervorNegativeAbilityCast
+            "b1f39dcf9fbcc8f49a7b5761bbfc27f6", // WarpriestFervorNegativeAbilitySelf
+        };
+
+        // Paladin lay on hands — same three ability blueprints as Kingmaker (Owlcat
+        // carried them over unchanged), covering the touch-other, self, and
+        // self-or-troth casts. The harm-undead use is the same ability, so the damage
+        // half of "whether using it to heal or harm" needs no separate list.
+        private static readonly string[] LayOnHandsAbilityGuids =
+        {
+            "caae1dc6fcf7b37408686971ee27db13", // LayOnHandsOthers
+            "8d6073201e5395d458b8251386d72df1", // LayOnHandsSelf
+            "8337cea04c8afd1428aad69defbfc365", // LayOnHandsSelfOrTroth
+        };
+
+        // Alchemist mutagen/cognatogen buffs — the natural armor favored class bonus
+        // applies only while one of these is active (RAW: "when using the character's
+        // mutagen"). Vanilla set only; a mutagen added by another mod would not be
+        // recognised, matching how the blast lists above are scoped.
+        private static readonly string[] MutagenBuffGuids =
+        {
+            "b84abc3531ed5674284ef0ba4aafcd3b", "f2be3d538b5d75c409289d35399723c4", "bd48322a4e258b8418106dcc6459e024",
+            "83ed8d5c1e4ed9045874494c0fe2b682", "a42c49fcb081bd1469679e4f515732c8", "84ae955af09809b4ea31a2c719c68377",
+            "d0a5cedfd497f3b4f9581b6066d9043b", "84c42fea967a2a8499ceeaef3a6416b8", "a8e7ca242395c3b49af5a3dbc9dee683",
+            "204a74affae72d54984fb533704caf72", "3b7cf6307d3e61545a977c9f4156e12e", "8d4357118c75a5746802a3582a937376",
+            "bf73a2b70b6fac54e891431cf6c7d8eb", "9c3761b9f48f69849ad78873c5a12147", "0d51a2ff0a6ce85458309affbc00b933",
+            "20e740104092b5e49bfb167f1670a9de", "6871149a90e278f479aa171ee8bb563e", "32f2bc843effd9b45a0952a3cffbbe9f",
+            "1c2fdba3b33dacd41afd5b74d84c7332", "34fde71198d30094aa133546e8cf8733", "b60f8b93d3d1d26439c1bb48fd461a3a",
+            "61271a59038390c488c313f7a0aee6ea", "bc0890817bb28fe4a86094fe57cd40fb", "60eb20b9d1077ed4f8f8a9df5490a208",
+            "8de52f7aa6052a0498875e0d834330af", "ac7753d72b0b7264982c2b6670fa2a2e", "a5a6f915d13fd994fb109473032d7440",
+            "608dd115b3b0fba4ab511f448bc798f8", "98a46e8da1dca9f47b41b9d71d579628", "232fe914c22744c4ea3e050901bda424",
+            "3fb9e9a6408589343bc8bfc3fd1610e5", // TrueMutagenBuff
+        };
+
+        // Eldritch Scion is an ARCHETYPE of Magus in WOTR (the same-named character
+        // class blueprint is the hidden spellbook helper, excluded from favored
+        // classes). Its arcana pool is a separate, Charisma-based selection, so the
+        // scion gets its own bonus-arcana entry and is excluded from both the regular
+        // magus arcana entry and the arcane pool entry (a scion has an eldritch pool
+        // instead, resource 17b6158d363e4844fa073483eb2655f8).
+        private const string EldritchScionArchetypeGuid = "d078b2ef073f2814c9e338a789d97b73";
+        private const string VanillaEldritchMagusArcanaSel = "d4b54d9db4932454ab2899f931c2042c";
+        private const string EldritchArcanaRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1baf";
+
+
         // Ability resources (Wave 3 — resource-pool favored class bonuses).
         private const string RageResourceGuid = "24353fcf8096ea54684a72bf58dedbc9";
         private const string BloodragerRageResourceGuid = "4aec9ec9d9cd5e24a95da90e56c72e37";
@@ -200,6 +390,70 @@ namespace WOTRFavoredClass
         // Wrapper reward selection -> its pick-counter feature: a reward pick also
         // counts as a pick, so the counter always shows the true number of picks.
         internal static readonly Dictionary<BlueprintGuid, string> RewardPickCounters = new();
+
+        // Witch patron progression -> the spells that patron grants, read out of the
+        // patron progressions' own AddKnownSpell components at install time.
+        // AnyPatronSpell is the union, used as a cheap first-pass reject on the cast
+        // path. Static lookup tables built from immutable blueprint data — never
+        // serialized, same as the dictionaries above.
+        internal static readonly Dictionary<BlueprintProgressionReference, HashSet<BlueprintGuid>> PatronSpells = new();
+        internal static readonly HashSet<BlueprintGuid> AnyPatronSpell = new();
+
+        // Witch patron progressions (WOTR ships 15).
+        private static readonly string[] WitchPatronProgressionGuids =
+        {
+            "08518b2a62446c74b9ae08ee73664047", // Agility
+            "b9c4e782706099f42a2ebc901acf492d", // Ancestors
+            "f4f3d8395db347938237c1bc77820781", // Dark Pact
+            "3a4214e3c2eab3c40bc491d7abea7045", // Deception
+            "facb0ed7d8e52b04cacf351bea430ce9", // Devotion
+            "67e85f52b1f020847aaa738d8999d4cd", // Elements
+            "8fe0a14c90d3ea94a833d087b8a09bb9", // Endurance
+            "a3e4ef40ad99f4d47af15cc5f16afc97", // Healing
+            "eafc47304da734a4d922ae663d82f1e5", // Insanity
+            "cad7c2fdabeb9574f95f4b9ffee20afe", // Mercy
+            "f48bfffe3618c274dbd42dfff8d0df56", // Shadow
+            "850ac8a2bc65d814db9f3fea871c18bb", // Strength
+            "23ea5ade326f80b488164f75580c03af", // Transformation
+            "e98d8d9f907c1814aa7376d6cdaac012", // Winter
+        };
+
+        // Walks each patron progression's level entries, collecting every spell it
+        // grants via AddKnownSpell. This is what makes the halfling witch's "+1/4
+        // caster level for patron spells" bonus possible without hard-coding spell
+        // lists: the patron itself is the source of truth, so patrons added or
+        // changed by other mods are picked up too.
+        private static void BuildPatronSpellMap()
+        {
+            PatronSpells.Clear();
+            AnyPatronSpell.Clear();
+            foreach (var progGuid in WitchPatronProgressionGuids)
+            {
+                var progression = ResourcesLibrary.TryGetBlueprint<BlueprintProgression>(BlueprintGuid.Parse(progGuid));
+                if (progression?.LevelEntries == null) continue;
+                var spells = new HashSet<BlueprintGuid>();
+                foreach (var entry in progression.LevelEntries)
+                {
+                    foreach (var featureRef in entry.m_Features)
+                    {
+                        var feature = featureRef?.Get();
+                        if (feature?.ComponentsArray == null) continue;
+                        foreach (var component in feature.ComponentsArray)
+                        {
+                            if (component is Kingmaker.UnitLogic.FactLogic.AddKnownSpell known
+                                && known.m_Spell != null && !known.m_Spell.deserializedGuid.Equals(BlueprintGuid.Empty))
+                            {
+                                spells.Add(known.m_Spell.deserializedGuid);
+                            }
+                        }
+                    }
+                }
+                if (spells.Count == 0) continue;
+                PatronSpells[BlueprintTool.GetRef<BlueprintProgressionReference>(progGuid)] = spells;
+                foreach (var s in spells) AnyPatronSpell.Add(s);
+            }
+            Main.Log($"Patron spell map: {PatronSpells.Count} patrons, {AnyPatronSpell.Count} distinct patron spells.");
+        }
         private static readonly HashSet<string> ExcludedClasses = new()
         {
             "f5b8c63b141b2f44cbb8c2d7579c34f5", // EldritchScionClass — magus subclass, excluded in the original too
@@ -291,11 +545,23 @@ namespace WOTRFavoredClass
                 AllModGuids.Add(bonusSelGuid);
                 AllModGuids.Add(progGuid);
 
-                // Reuse the class's own LocalizedString: mod classes (e.g. Swashbuckler)
-                // may not have their localization resolved yet at install time, so baking
-                // cls.Name into a new string produces "null" labels.
+                // "Inquisitor" alone reads as a duplicate of the class's own progression
+                // entry — append " Favored Class" so the two are visually distinct. Read
+                // the class name through the SAME resolution path the game itself uses
+                // for cls.LocalizedName (LocalizationManager.CurrentPack.GetText on its
+                // key), not the raw cls.Name field: mod classes (e.g. Swashbuckler) may
+                // not have cls.Name populated at install time, which is what previously
+                // produced "null" labels. Fall back to the bare class name if this
+                // specific class's string genuinely isn't registered yet, rather than
+                // ever baking in an empty/null result.
+                var resolvedClassName = Kingmaker.Localization.LocalizationManager.CurrentPack
+                    .GetText(cls.LocalizedName.m_Key, reportUnknown: false);
+                var progressionName = !string.IsNullOrEmpty(resolvedClassName)
+                    ? LocalizationTool.CreateString($"ZFCW.FC.{clsGuid}", $"{resolvedClassName} Favored Class", tagEncyclopediaEntries: false)
+                    : cls.LocalizedName;
+
                 ProgressionConfigurator.New($"ZFCWFavoredClass{cls.name}Progression", progGuid)
-                    .SetDisplayName(cls.LocalizedName)
+                    .SetDisplayName(progressionName)
                     .SetDescription(selectionDesc)
                     .SetIsClassFeature(true)
                     .SetClasses(clsGuid)
@@ -350,65 +616,12 @@ namespace WOTRFavoredClass
 
             BonusDisplays[BlueprintGuid.Parse(HpFeatureGuid)] = (1, BonusDisplayKind.HitPoints);
             BonusDisplays[BlueprintGuid.Parse(SkillFeatureGuid)] = (2, BonusDisplayKind.SkillRanks);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b08")] = (5, BonusDisplayKind.Feet);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b11")] = (5, BonusDisplayKind.Feet);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b09")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b0b")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b0d")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b0f")] = (4, BonusDisplayKind.Flat);
-            // Wrapper pick counters are the nested progress features.
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b14")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b15")] = (6, BonusDisplayKind.Feats);
-            // Resource-pool bonuses (Wave 3).
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b1d")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b1f")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b21")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b23")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b25")] = (2, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b27")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b29")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2b")] = (1, BonusDisplayKind.Flat);
-            // "1/6 of a new X" wrapper selections (Wave 4). Keyed on each entry's
-            // ProgressGuid, not FeatureGuid — the ProgressGuid feature is the one
-            // carrying PrerequisiteRankProgressDisplay and visible in Special
-            // Abilities, matching WpFeat/MagicalTail/TeamworkFeat/Cruelty above.
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2e")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b31")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b34")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b37")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3a")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3d")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b40")] = (6, BonusDisplayKind.Feats);
-            // Wave 5: concentration, maneuvers, damage, resistance, studied target,
-            // third-party pools, companion saves, teamwork/cruelty wrappers, monk speed.
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b42")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b43")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b44")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b45")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b46")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b48")] = (3, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b4a")] = (3, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b4c")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b4e")] = (2, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b50")] = (2, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b52")] = (2, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b54")] = (2, BonusDisplayKind.Flat);
+            // Every other entry is populated automatically from its RacialBonusDef inside the
+            // defs-processing loop below (see the "Tooltip display" comment there) — this
+            // retired counter is the one exception, since it no longer has a def at all (its
+            // RacialBonusDef was replaced by FavoredEnemyPick; only the hidden stub survives,
+            // for old-save compatibility).
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b55")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b57")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b58")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b59")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5a")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5b")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5c")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5d")] = (1, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5e")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b60")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b62")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b64")] = (6, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b68")] = (4, BonusDisplayKind.Flat);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6b")] = (6, BonusDisplayKind.Feats);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6d")] = (5, BonusDisplayKind.Feet);
-            BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6f")] = (4, BonusDisplayKind.Feats);
 
             Main.Log($"Favored class system installed: {progressionGuids.Count} class progressions, selection attached to {attached} class L1 entries.");
         }
@@ -428,6 +641,10 @@ namespace WOTRFavoredClass
             public string[] RewardFeatures;    // items of the reward selection (null = filled manually)
             public string EffectGuid;          // separate effect feature ranked up at each threshold
             public Action<FeatureConfigurator> Components;   // components that stay on the counter itself
+            public string[] ExcludeArchetypes; // hide the whole entry for characters with these archetypes
+            public string RequireArchetype;    // show the entry ONLY for this archetype
+            public BonusDisplayKind DisplayKind = BonusDisplayKind.Flat; // tooltip wording for the earned bonus
+            public bool SkipBonusDisplay;      // opt out when the real progression isn't floor(rank/Divisor)
         }
 
         private sealed class EffectDef
@@ -455,12 +672,75 @@ namespace WOTRFavoredClass
                 },
                 new()
                 {
+                    // Same blueprint as before (rank still means "earned whole bonuses"),
+                    // but the bonus is now correctly gated on an active mutagen —
+                    // previously it applied unconditionally, a documented fidelity gap.
                     Key = "NaturalACEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b17", Ranks = 5,
-                    DisplayName = "Natural Armor Bonus",
-                    Description = "+1 natural armor bonus to Armor Class per rank.",
+                    DisplayName = "Mutagen Natural Armor Bonus",
+                    Description = "+1 natural armor bonus to Armor Class per rank while the character's mutagen is active.",
+                    Components = f => f.AddComponent<NaturalACWhileTransformedPerRank>(c =>
+                        c.m_Buffs = MutagenBuffGuids.Select(g =>
+                            BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(g)).ToArray()),
+                },
+                new()
+                {
+                    Key = "WildShapeACEffect", Guid = WildShapeACEffectGuid, Ranks = 6,
+                    DisplayName = "Wild Shape Natural Armor Bonus",
+                    Description = "+1 natural armor bonus to Armor Class per rank while using wild shape.",
+                    Components = f => f.AddComponent<NaturalACWhileTransformedPerRank>(c => c.AnyPolymorph = true),
+                },
+                new()
+                {
+                    Key = "LayOnHandsEffect", Guid = LayOnHandsEffectGuid, Ranks = 10,
+                    DisplayName = "Lay on Hands Bonus",
+                    Description = "+1 hit point per rank to the paladin's lay on hands ability, whether using it to heal or harm.",
                     Components = f => f
-                        .AddContextStatBonus(Kingmaker.EntitySystem.Stats.StatType.AC, ContextValues.Rank(), Kingmaker.Enums.ModifierDescriptor.NaturalArmor)
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b17")),
+                        .AddComponent<HealBonusForAbilitiesPerRank>(c =>
+                            c.m_Abilities = LayOnHandsAbilityGuids.Select(g =>
+                                BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray())
+                        .AddComponent<AbilityDamageBonusPerRank>(c =>
+                            c.m_Abilities = LayOnHandsAbilityGuids.Select(g =>
+                                BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray()),
+                },
+                // (No LayOnHandsSelfEffect here: that bonus has no divisor, so a separate
+                // effect feature would just be a same-named, same-rank twin of the counter
+                // in Special Abilities. Its component now sits on the counter itself, the
+                // way every other divisor-1 entry does — see the LayOnHandsSelf def below;
+                // the old effect blueprint is retired to a hidden stub further down.)
+                new()
+                {
+                    Key = "ChannelEnergyEffect", Guid = ChannelEnergyEffectGuid, Ranks = 7,
+                    DisplayName = "Channel Energy Bonus",
+                    Description = "+1 point per rank to the healing or damage done by channel energy.",
+                    Components = f => f
+                        .AddComponent<HealBonusForAbilitiesPerRank>(c =>
+                            c.m_Abilities = ChannelEnergyAbilityGuids.Select(g =>
+                                BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray())
+                        .AddComponent<AbilityDamageBonusPerRank>(c =>
+                            c.m_Abilities = ChannelEnergyAbilityGuids.Select(g =>
+                                BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray()),
+                },
+                new()
+                {
+                    Key = "HarmUndeadEffect", Guid = HarmUndeadEffectGuid, Ranks = 10,
+                    DisplayName = "Harm Undead Bonus",
+                    Description = "+1 point per rank to the damage done by channel energy for the purpose of harming undead.",
+                    Components = f => f.AddComponent<AbilityDamageBonusPerRank>(c =>
+                        c.m_Abilities = ChannelEnergyAbilityGuids.Select(g =>
+                            BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray()),
+                },
+                new()
+                {
+                    Key = "FervorEffect", Guid = FervorEffectGuid, Ranks = 10,
+                    DisplayName = "Fervor Bonus",
+                    Description = "+1 point per rank to the healing or damage done by fervor.",
+                    Components = f => f
+                        .AddComponent<HealBonusForAbilitiesPerRank>(c =>
+                            c.m_Abilities = FervorAbilityGuids.Select(g =>
+                                BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray())
+                        .AddComponent<AbilityDamageBonusPerRank>(c =>
+                            c.m_Abilities = FervorAbilityGuids.Select(g =>
+                                BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray()),
                 },
                 new()
                 {
@@ -591,12 +871,31 @@ namespace WOTRFavoredClass
                 },
                 new()
                 {
+                    // Retired: replaced by the per-enemy pick below, which matches the
+                    // original's "a single existing favored enemy" wording. Kept
+                    // registered (rule: retired blueprints become hidden stubs) so
+                    // saves made before the rework still load.
                     Key = "FavoredEnemyAtkDmgEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b56", Ranks = 5,
                     DisplayName = "Favored Enemy Attack and Damage Bonus",
                     Description = "+1 to attack and damage rolls against favored enemies per rank.",
                     Components = f => f
                         .AddComponent<AttackBonusAgainstFavoredEnemyPerRank>()
                         .AddComponent<DamageBonusAgainstFavoredEnemyPerRank>(),
+                },
+                new()
+                {
+                    Key = "ReservoirRegenEffect", Guid = ReservoirRegenEffectGuid, Ranks = 4,
+                    DisplayName = "Bonus Arcane Reservoir Restored",
+                    Description = "+1 point per rank restored to the arcanist's arcane reservoir after resting.",
+                    Components = f => f.AddComponent<RestoreResourceOnRestPerRank>(c =>
+                        c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(ArcanistArcaneReservoirResourceGuid)),
+                },
+                new()
+                {
+                    Key = "PatronCLEffect", Guid = PatronCLEffectGuid, Ranks = 5,
+                    DisplayName = "Patron Spells Caster Level",
+                    Description = "+1 caster level per rank when casting spells from the witch's patron spell list.",
+                    Components = f => f.AddComponent<PatronSpellCasterLevelPerRank>(),
                 },
                 new()
                 {
@@ -674,15 +973,60 @@ namespace WOTRFavoredClass
                 .Configure();
             AllModGuids.Add(CompanionSavesPetGuid);
 
+            // Wave 6 (bonus known spells): custom race-specific spell lists, built
+            // once here from already-loaded native class lists before the defs below
+            // reference them by guid.
+            BuildFilteredSpellList("ZFCWGanziOracleSpellList", GanziOracleSpellListGuid, 8,
+                spell => spell.School == SpellSchool.Enchantment,
+                BlueprintTool.Get<BlueprintCharacterClass>(WizardClassGuid)?.Spellbook?.SpellList,
+                BlueprintTool.Get<BlueprintCharacterClass>(ClericClassGuid)?.Spellbook?.SpellList);
+            BuildFilteredSpellList("ZFCWGoblinSorcererSpellList", GoblinSorcererSpellListGuid, 8,
+                spell => (spell.SpellDescriptor & SpellDescriptor.Fire) != 0,
+                BlueprintTool.Get<BlueprintCharacterClass>(WizardClassGuid)?.Spellbook?.SpellList);
+            {
+                var shamanOwnGuids = new HashSet<string>();
+                var shamanOwnList = BlueprintTool.Get<BlueprintCharacterClass>(ShamanClassGuid)?.Spellbook?.SpellList;
+                if (shamanOwnList?.SpellsByLevel != null)
+                {
+                    foreach (var lvl in shamanOwnList.SpellsByLevel)
+                    foreach (var s in lvl.Spells)
+                        if (s != null) shamanOwnGuids.Add(s.AssetGuid.ToString());
+                }
+                BuildFilteredSpellList("ZFCWShamanKnownSpellList", ShamanKnownSpellListGuid, 8,
+                    spell => !shamanOwnGuids.Contains(spell.AssetGuid.ToString()),
+                    BlueprintTool.Get<BlueprintCharacterClass>(ClericClassGuid)?.Spellbook?.SpellList);
+            }
+
+            // Wizard "bonus known spell" is one FCB entry whose reward selection
+            // carries a generic track (full wizard list, hidden once any Thassilonian
+            // Specialist school is taken) plus one track per school (own restricted
+            // spell list, visible only with that specific specialization) — the
+            // player only ever sees the one matching their build, per-option
+            // prerequisites do the narrowing, no separate FCB choices needed.
+            var wizardRewardFeatures = BuildKnownSpellRewardFeatures(
+                "WizardKnownSpell", WizardKnownSpellLevelGuids, WizardClassGuid, 8,
+                ClassSpellListGuid(WizardClassGuid),
+                extraPrereq: c =>
+                {
+                    foreach (var track in ThassilonianTracks) c.AddPrerequisiteNoFeature(track.ArchetypeFeatureGuid);
+                });
+            foreach (var track in ThassilonianTracks)
+            {
+                wizardRewardFeatures.AddRange(BuildKnownSpellRewardFeatures(
+                    $"WizardKnownSpell{track.School}", track.LevelGuids,
+                    WizardClassGuid, 8, track.SpellListGuid,
+                    extraPrereq: c => c.AddPrerequisiteFeature(track.ArchetypeFeatureGuid)));
+            }
+
             var defs = new List<RacialBonusDef>
             {
                 new()
                 {
                     Key = "WpFeat", FeatureGuid = WpCombatPartialGuid,
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Combat Feat (+1/6)",
                     Description = "Gain 1/6 of a new bonus combat feat.",
-                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid },
+                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
                     Classes = new[] { WarpriestClassGuid },
                     ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b14",
                     RewardSelectionGuid = WpCombatSelGuid,
@@ -691,7 +1035,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "SpeedBarbarian", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b08",
-                    Divisor = 5, Ranks = 20,
+                    Divisor = 5, Ranks = 20, DisplayKind = BonusDisplayKind.Feet,
                     DisplayName = "Bonus Speed (+1 ft.)", EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b1a",
                     Description = "Add +1 to the barbarian's base speed. In combat this option has no effect unless the barbarian has selected it five times (or another increment of five). " +
                         "This bonus stacks with the barbarian's fast movement feature and applies under the same conditions as that feature.",
@@ -701,7 +1045,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "SpeedBloodrager", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b11",
-                    Divisor = 5, Ranks = 20,
+                    Divisor = 5, Ranks = 20, DisplayKind = BonusDisplayKind.Feet,
                     DisplayName = "Bonus Speed (+1 ft.)", EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b1a",
                     Description = "Add +1 to the bloodrager's base speed. In combat this option has no effect unless the bloodrager has selected it five times (or another increment of five). " +
                         "This bonus stacks with the bloodrager's fast movement feature and applies under the same conditions as that feature.",
@@ -720,7 +1064,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "MagicalTail", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b13",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Magical Tail (+1/6)",
                     Description = "Gain 1/6 of a new Magical Tail feat.",
                     Races = new[] { KitsuneRaceGuid },
@@ -833,6 +1177,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1/4 point to the magus's arcane pool.",
                     Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid, SuliRaceGuid, FetchlingRaceGuid },
                     Classes = new[] { MagusClassGuid },
+                    // A scion has an eldritch pool, not an arcane pool — this entry
+                    // would be inert for it.
+                    ExcludeArchetypes = new[] { EldritchScionArchetypeGuid },
                 },
                 new()
                 {
@@ -848,7 +1195,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "RogueTalent", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2d",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Rogue Talent (+1/6)",
                     Description = "Gain 1/6 of a new rogue talent.",
                     Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
@@ -860,7 +1207,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "WitchHex", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b30",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Witch Hex (+1/6)",
                     Description = "Gain 1/6 of a new witch hex.",
                     Races = new[] { GnomeRaceGuid },
@@ -872,7 +1219,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "ArcanistExploit", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b33",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Arcanist Exploit (+1/6)",
                     Description = "Gain 1/6 of a new arcanist exploit.",
                     Races = new[] { HalflingRaceGuid },
@@ -884,7 +1231,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "ShamanHex", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b36",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Shaman Hex (+1/6)",
                     Description = "Gain 1/6 of a new shaman hex.",
                     Races = new[] { GnomeRaceGuid },
@@ -896,7 +1243,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "SlayerTalent", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b39",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Slayer Talent (+1/6)",
                     Description = "Gain 1/6 of a new slayer talent.",
                     Races = new[] { HumanRaceGuid, GnomeRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
@@ -908,7 +1255,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "KineticistWildTalent", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3c",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Wild Talent (+1/6)",
                     Description = "Gain 1/6 of a new wild talent.",
                     Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
@@ -920,7 +1267,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "MagusArcana", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b3f",
-                    Divisor = 6, Ranks = 18,
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Magus Arcana (+1/6)",
                     Description = "Gain 1/6 of a new magus arcana.",
                     Races = new[] { ElfRaceGuid, HalflingRaceGuid, HalfElfRaceGuid },
@@ -928,6 +1275,22 @@ namespace WOTRFavoredClass
                     ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b40",
                     RewardSelectionGuid = MagusArcanaRewardGuid,
                     RewardFeatures = null,
+                    // The scion's arcana are a separate, Charisma-based pool — it gets
+                    // its own entry below instead.
+                    ExcludeArchetypes = new[] { EldritchScionArchetypeGuid },
+                },
+                new()
+                {
+                    Key = "EldritchArcana", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bad",
+                    Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Eldritch Scion Arcana (+1/6)",
+                    Description = "Gain 1/6 of a new magus arcana.",
+                    Races = new[] { ElfRaceGuid, HalflingRaceGuid, HalfElfRaceGuid },
+                    Classes = new[] { MagusClassGuid },
+                    RequireArchetype = EldritchScionArchetypeGuid,
+                    ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bae",
+                    RewardSelectionGuid = EldritchArcanaRewardGuid,
+                    RewardFeatures = null, // mirrored from the eldritch (Charisma-based) arcana pool
                 },
                 // Wave 5: concentration, combat maneuvers, spell/blast damage, favored
                 // enemy attack/damage, energy resistance, studied target, third-party
@@ -1046,12 +1409,36 @@ namespace WOTRFavoredClass
                 },
                 new()
                 {
-                    Key = "FavoredEnemyAtkDmg", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b55",
+                    // Corrected shape: the original lets you add +1/4 to ONE of your
+                    // already-chosen favored enemies (max +1 each), not a blanket bonus
+                    // against all of them. Each reward is one +1 against one enemy type.
+                    Key = "FavoredEnemyPick", FeatureGuid = FavoredEnemyPickFeatureGuid,
                     Divisor = 4, Ranks = 20,
-                    DisplayName = "Favored Enemy Bonus (+1/4)", EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b56",
-                    Description = "Add +1/4 to attack and damage rolls against the ranger's favored enemies.",
+                    DisplayName = "Favored Enemy Bonus (+1/4)",
+                    Description = "Add +1/4 to a single existing favored enemy bonus (maximum bonus +1 per favored enemy).",
                     Races = new[] { HobgoblinRaceGuid },
                     Classes = new[] { RangerClassGuid },
+                    ProgressGuid = FavoredEnemyPickProgressGuid,
+                    RewardSelectionGuid = FavoredEnemyPickRewardGuid,
+                    RewardFeatures = null, // one feature per favored enemy type, generated after the loop
+                },
+                new()
+                {
+                    Key = "ReservoirRegen", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bba",
+                    Divisor = 6, Ranks = 18,
+                    DisplayName = "Bonus Arcane Reservoir Restored (+1/6)", EffectGuid = ReservoirRegenEffectGuid,
+                    Description = "Add 1/6 to the number of points the arcanist gains in her arcane reservoir each day.",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { ArcanistClassGuid },
+                },
+                new()
+                {
+                    Key = "PatronCL", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bbc",
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Patron Spells Caster Level (+1/4)", EffectGuid = PatronCLEffectGuid,
+                    Description = "Add +1/4 to the witch's caster level when casting spells from her patron spell list.",
+                    Races = new[] { HalflingRaceGuid },
+                    Classes = new[] { WitchClassGuid },
                 },
                 new()
                 {
@@ -1176,7 +1563,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "CompanionDR", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b66",
-                    Divisor = 1, Ranks = 19,
+                    Divisor = 1, Ranks = 19, SkipBonusDisplay = true, // real curve is 1, +1/2... not floor(rank/Divisor)
                     DisplayName = "Companion Damage Reduction",
                     Description = "The character's animal companion gains DR 1/magic. Each additional time this bonus is selected, the DR increases by 1/2 (maximum DR 10/magic).",
                     Races = new[] { GnomeRaceGuid, FetchlingRaceGuid },
@@ -1198,10 +1585,16 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "TeamworkFeat", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6a",
-                    Divisor = 6, Ranks = 18,
-                    DisplayName = "Bonus Teamwork Feat (+1/6)",
-                    Description = "Gain 1/6 of a new teamwork feat.",
-                    Races = new[] { DrowRaceGuid },
+                    Divisor = 4, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Teamwork Feat (+1/4)",
+                    // RAW (Blood of Shadows p.15) is "Gain 1/4 of a teamwork feat" for
+                    // Drow. Half-Elf/Halfling's own RAW text ("+1/4 to the number of
+                    // times per day the inquisitor can change her most recent teamwork
+                    // feat") has no equivalent mechanic in WOTR, so they share this same
+                    // entry as the closest available substitute instead of being ported
+                    // literally — see BONUS-MATRIX.md.
+                    Description = "Gain 1/4 of a new teamwork feat.",
+                    Races = new[] { DrowRaceGuid, HalfElfRaceGuid, HalflingRaceGuid },
                     Classes = new[] { InquisitorClassGuid },
                     ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6b",
                     RewardSelectionGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6c",
@@ -1210,7 +1603,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "SpeedMonk", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6d",
-                    Divisor = 5, Ranks = 20,
+                    Divisor = 5, Ranks = 20, DisplayKind = BonusDisplayKind.Feet,
                     DisplayName = "Bonus Speed (+1 ft.)", EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b1a",
                     Description = "Add +1 to the monk's base speed. In combat this option has no effect unless the monk has selected it five times (or another increment of five). " +
                         "This bonus stacks with the monk's fast movement feature and applies under the same conditions as that feature.",
@@ -1220,7 +1613,7 @@ namespace WOTRFavoredClass
                 new()
                 {
                     Key = "Cruelty", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6e",
-                    Divisor = 4, Ranks = 20,
+                    Divisor = 4, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Cruelty (+1/4)",
                     Description = "Gain 1/4 of a new cruelty.",
                     Races = new[] { DrowRaceGuid },
@@ -1228,6 +1621,231 @@ namespace WOTRFavoredClass
                     ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6f",
                     RewardSelectionGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b70",
                     RewardFeatures = null, // mirrored from MCE's cruelty selection
+                },
+                // Wave 6: bonus known spells. All 1/2-increment wrapper entries —
+                // reward features are freshly-authored parametrized spell picks
+                // (BuildKnownSpellRewardFeatures), not mirrored vanilla selections.
+                new()
+                {
+                    Key = "AlchemistKnownSpell", FeatureGuid = AlchemistKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Formula (+1/2)",
+                    Description = "Add 1/2 formula known to the alchemist's formula book. This formula must be at least 1 level below the highest formula level the alchemist can create.",
+                    Races = new[] { ElfRaceGuid, HumanRaceGuid, HalflingRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { AlchemistClassGuid },
+                    ProgressGuid = AlchemistKnownSpellProgressGuid,
+                    RewardSelectionGuid = AlchemistKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("AlchemistKnownSpell", AlchemistKnownSpellLevelGuids,
+                        AlchemistClassGuid, 5, ClassSpellListGuid(AlchemistClassGuid), levelNoun: "Formula").ToArray(),
+                },
+                new()
+                {
+                    Key = "BardKnownSpell", FeatureGuid = BardKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the bard's spell list. This spell must be at least 1 level below the highest spell level the bard can cast.",
+                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { BardClassGuid },
+                    ProgressGuid = BardKnownSpellProgressGuid,
+                    RewardSelectionGuid = BardKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("BardKnownSpell", BardKnownSpellLevelGuids,
+                        BardClassGuid, 5, ClassSpellListGuid(BardClassGuid)).ToArray(),
+                },
+                new()
+                {
+                    Key = "InquisitorKnownSpell", FeatureGuid = InquisitorKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the inquisitor's spell list. This spell must be at least 1 level below the highest spell level the inquisitor can cast.",
+                    Races = new[] { ElfRaceGuid, HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { InquisitorClassGuid },
+                    ProgressGuid = InquisitorKnownSpellProgressGuid,
+                    RewardSelectionGuid = InquisitorKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("InquisitorKnownSpell", InquisitorKnownSpellLevelGuids,
+                        InquisitorClassGuid, 5, ClassSpellListGuid(InquisitorClassGuid)).ToArray(),
+                },
+                new()
+                {
+                    Key = "OracleKnownSpell", FeatureGuid = OracleKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the oracle's spell list. This spell must be at least 1 level below the highest spell level the oracle can cast.",
+                    Races = new[] { ElfRaceGuid, HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { OracleClassGuid },
+                    ProgressGuid = OracleKnownSpellProgressGuid,
+                    RewardSelectionGuid = OracleKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("OracleKnownSpell", OracleKnownSpellLevelGuids,
+                        OracleClassGuid, 8, ClassSpellListGuid(OracleClassGuid)).ToArray(),
+                },
+                new()
+                {
+                    Key = "OracleGanziKnownSpell", FeatureGuid = OracleGanziKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell — Enchantment (+1/2)",
+                    Description = "Add 1/2 spell known of the enchantment school from the cleric or wizard spell list. This spell must be at least 1 level below the highest spell level the oracle can cast.",
+                    Races = new[] { GanziRaceGuid },
+                    Classes = new[] { OracleClassGuid },
+                    ProgressGuid = OracleGanziKnownSpellProgressGuid,
+                    RewardSelectionGuid = OracleGanziKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("OracleGanziKnownSpell", OracleGanziKnownSpellLevelGuids,
+                        OracleClassGuid, 8, GanziOracleSpellListGuid).ToArray(),
+                },
+                new()
+                {
+                    Key = "ShamanKnownSpell", FeatureGuid = ShamanKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known from the cleric spell list (excluding spells already on the shaman spell list). This spell must be at least 1 level below the highest spell level the shaman can cast.",
+                    Races = new[] { HalfElfRaceGuid, HumanRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { ShamanClassGuid },
+                    ProgressGuid = ShamanKnownSpellProgressGuid,
+                    RewardSelectionGuid = ShamanKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("ShamanKnownSpell", ShamanKnownSpellLevelGuids,
+                        ShamanClassGuid, 8, ShamanKnownSpellListGuid).ToArray(),
+                },
+                new()
+                {
+                    Key = "SorcererKnownSpell", FeatureGuid = SorcererKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the sorcerer's spell list. This spell must be at least 1 level below the highest spell level the sorcerer can cast.",
+                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { SorcererClassGuid },
+                    ProgressGuid = SorcererKnownSpellProgressGuid,
+                    RewardSelectionGuid = SorcererKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("SorcererKnownSpell", SorcererKnownSpellLevelGuids,
+                        SorcererClassGuid, 8, ClassSpellListGuid(SorcererClassGuid)).ToArray(),
+                },
+                new()
+                {
+                    Key = "SorcererGoblinKnownSpell", FeatureGuid = SorcererGoblinKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell — Fire (+1/2)",
+                    Description = "Add 1/2 spell known from the sorcerer spell list. This spell must be at least 1 level below the highest spell level the sorcerer can cast, and must have the fire descriptor.",
+                    Races = new[] { GoblinRaceGuid },
+                    Classes = new[] { SorcererClassGuid },
+                    ProgressGuid = SorcererGoblinKnownSpellProgressGuid,
+                    RewardSelectionGuid = SorcererGoblinKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("SorcererGoblinKnownSpell", SorcererGoblinKnownSpellLevelGuids,
+                        SorcererClassGuid, 8, GoblinSorcererSpellListGuid).ToArray(),
+                },
+                new()
+                {
+                    Key = "WizardKnownSpell", FeatureGuid = WizardKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the wizard's spellbook. This spell must be at least 1 level below the highest spell level the wizard can cast. " +
+                        "A Thassilonian Specialist instead learns this spell from the spell list of his bound school.",
+                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { WizardClassGuid },
+                    ProgressGuid = WizardKnownSpellProgressGuid,
+                    RewardSelectionGuid = WizardKnownSpellRewardGuid,
+                    RewardFeatures = wizardRewardFeatures.ToArray(),
+                },
+                new()
+                {
+                    Key = "WitchKnownSpell", FeatureGuid = WitchKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the witch's spell list. This spell must be at least 1 level below the highest spell level the witch can cast.",
+                    Races = new[] { HumanRaceGuid, HalfOrcRaceGuid, HalfElfRaceGuid, ElfRaceGuid, AasimarRaceGuid, TieflingRaceGuid, GoblinRaceGuid },
+                    Classes = new[] { WitchClassGuid },
+                    ProgressGuid = WitchKnownSpellProgressGuid,
+                    RewardSelectionGuid = WitchKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("WitchKnownSpell", WitchKnownSpellLevelGuids,
+                        WitchClassGuid, 8, ClassSpellListGuid(WitchClassGuid)).ToArray(),
+                },
+                new()
+                {
+                    Key = "SkaldKnownSpell", FeatureGuid = SkaldKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the skald's spell list. This spell must be at least 1 level below the highest spell level the skald can cast.",
+                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { SkaldClassGuid },
+                    ProgressGuid = SkaldKnownSpellProgressGuid,
+                    RewardSelectionGuid = SkaldKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("SkaldKnownSpell", SkaldKnownSpellLevelGuids,
+                        SkaldClassGuid, 5, ClassSpellListGuid(SkaldClassGuid)).ToArray(),
+                },
+                new()
+                {
+                    Key = "ArcanistKnownSpell", FeatureGuid = ArcanistKnownSpellFeatureGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell (+1/2)",
+                    Description = "Add 1/2 spell known to the arcanist's spell list. This spell must be at least 1 level below the highest spell level the arcanist can cast.",
+                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { ArcanistClassGuid },
+                    ProgressGuid = ArcanistKnownSpellProgressGuid,
+                    RewardSelectionGuid = ArcanistKnownSpellRewardGuid,
+                    RewardFeatures = BuildKnownSpellRewardFeatures("ArcanistKnownSpell", ArcanistKnownSpellLevelGuids,
+                        ArcanistClassGuid, 8, ClassSpellListGuid(ArcanistClassGuid)).ToArray(),
+                    ExcludeArchetypes = ArcanistKnownSpellExcludedArchetypes,
+                },
+                // Wave 7: lay on hands, conditional natural armor, channel energy,
+                // fervor. (The eldritch scion arcana entry sits next to the regular
+                // magus arcana entry above.)
+                new()
+                {
+                    Key = "LayOnHands", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1ba9",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Lay on Hands Bonus (+1/2)", EffectGuid = LayOnHandsEffectGuid,
+                    Description = "Add +1/2 hit point to the paladin's lay on hands ability (whether using it to heal or harm).",
+                    Races = new[] { ElfRaceGuid, GnomeRaceGuid, HalflingRaceGuid, HalfElfRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                },
+                new()
+                {
+                    Key = "LayOnHandsSelf", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1baa",
+                    Divisor = 1, Ranks = 20,
+                    DisplayName = "Lay on Hands Self-Healing Bonus",
+                    Description = "Add +1 to the amount of damage the paladin heals with lay on hands, but only when the paladin uses that ability on herself.",
+                    Races = new[] { TieflingRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                    // No divisor, so the effect rides the counter directly instead of a
+                    // separate feature — one entry in Special Abilities, not two identical ones.
+                    Components = f => f.AddComponent<HealBonusForAbilitiesPerRank>(c =>
+                    {
+                        c.m_Abilities = LayOnHandsAbilityGuids.Select(g =>
+                            BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray();
+                        c.SelfOnly = true;
+                    }),
+                },
+                new()
+                {
+                    Key = "WildShapeAC", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bac",
+                    Divisor = 3, Ranks = 18,
+                    DisplayName = "Wild Shape Natural Armor Bonus (+1/3)", EffectGuid = WildShapeACEffectGuid,
+                    Description = "Add +1/3 to the druid's natural armor bonus when using wild shape.",
+                    Races = new[] { ElfRaceGuid, HalfOrcRaceGuid, HalfElfRaceGuid },
+                    Classes = new[] { DruidClassGuid },
+                },
+                new()
+                {
+                    Key = "ChannelEnergy", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb1",
+                    Divisor = 3, Ranks = 18,
+                    DisplayName = "Channel Energy Bonus (+1/3)", EffectGuid = ChannelEnergyEffectGuid,
+                    Description = "Add +1/3 point to the amount of damage healed or dealt by the character's channel energy ability.",
+                    Races = new[] { HalfElfRaceGuid },
+                    Classes = new[] { ClericClassGuid, WarpriestClassGuid },
+                },
+                new()
+                {
+                    Key = "HarmUndead", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb5",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Harm Undead Bonus (+1/2)", EffectGuid = HarmUndeadEffectGuid,
+                    Description = "Add +1/2 point to the amount of damage dealt by the cleric's channel energy ability for the purpose of harming undead.",
+                    Races = new[] { AasimarRaceGuid },
+                    Classes = new[] { ClericClassGuid },
+                },
+                new()
+                {
+                    Key = "Fervor", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bb3",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Fervor Bonus (+1/2)", EffectGuid = FervorEffectGuid,
+                    Description = "Add +1/2 point to the amount of damage healed or dealt by the warpriest's fervor ability.",
+                    Races = new[] { DrowRaceGuid },
+                    Classes = new[] { WarpriestClassGuid },
                 },
             };
 
@@ -1256,6 +1874,17 @@ namespace WOTRFavoredClass
                             c.Step = def.Divisor;
                         });
                     }
+                    if (def.ExcludeArchetypes != null)
+                    {
+                        foreach (var archetypeGuid in def.ExcludeArchetypes)
+                        {
+                            conf = conf.AddPrerequisiteNoArchetype(archetypeGuid, def.Classes[0]);
+                        }
+                    }
+                    if (def.RequireArchetype != null)
+                    {
+                        conf = conf.AddPrerequisiteArchetypeLevel(def.RequireArchetype, def.Classes[0], level: 1);
+                    }
                     def.Components?.Invoke(conf);
                     conf.Configure();
                 }
@@ -1280,6 +1909,14 @@ namespace WOTRFavoredClass
                             c.m_Full = rewardRef;
                             c.Divisor = def.Divisor;
                             c.Not = true;
+                            // Gate only, no tooltip line: the progress readout belongs on the
+                            // outer entry (which carries PrerequisiteRankProgressDisplay), not
+                            // on the choices nested inside it — the cycle counts picks since
+                            // the last reward (x/Divisor-1), so printing it here contradicts
+                            // the outer x/Divisor readout. Native HideInUI is display-only:
+                            // TooltipTemplateLevelUp.AddPrerequisites filters on it, while
+                            // BlueprintFeature.MeetsPrerequisites ignores it and still checks.
+                            c.HideInUI = true;
                         })
                         .Configure();
                     AllModGuids.Add(def.ProgressGuid);
@@ -1296,6 +1933,7 @@ namespace WOTRFavoredClass
                             c.m_Full = rewardRef;
                             c.Divisor = def.Divisor;
                             c.Not = false;
+                            c.HideInUI = true; // same as the progress feature above
                         });
                     if (def.RewardFeatures != null)
                     {
@@ -1305,7 +1943,7 @@ namespace WOTRFavoredClass
                     rewardConf.Configure();
                     AllModGuids.Add(def.RewardSelectionGuid);
 
-                    FeatureSelectionConfigurator.New($"ZFCW{def.Key}Bonus", def.FeatureGuid)
+                    var outerConf = FeatureSelectionConfigurator.New($"ZFCW{def.Key}Bonus", def.FeatureGuid)
                         .SetDisplayName(name)
                         .SetDescription(desc)
                         .SetRanks(def.Ranks)
@@ -1316,10 +1954,32 @@ namespace WOTRFavoredClass
                             c.m_Fact = BlueprintTool.GetRef<BlueprintUnitFactReference>(def.FeatureGuid);
                             c.Step = def.Divisor;
                         })
-                        .AddToAllFeatures(def.ProgressGuid, def.RewardSelectionGuid)
-                        .Configure();
+                        .AddToAllFeatures(def.ProgressGuid, def.RewardSelectionGuid);
+                    if (def.ExcludeArchetypes != null)
+                    {
+                        foreach (var archetypeGuid in def.ExcludeArchetypes)
+                        {
+                            outerConf = outerConf.AddPrerequisiteNoArchetype(archetypeGuid, def.Classes[0]);
+                        }
+                    }
+                    if (def.RequireArchetype != null)
+                    {
+                        outerConf = outerConf.AddPrerequisiteArchetypeLevel(def.RequireArchetype, def.Classes[0], level: 1);
+                    }
+                    outerConf.Configure();
                 }
                 AllModGuids.Add(def.FeatureGuid);
+                // Tooltip display derives straight from this same def — wrapper mode shows
+                // progress on the nested ProgressGuid feature (the FeatureGuid is just the
+                // outer selection wrapper), plain mode shows it on FeatureGuid directly. This
+                // keeps BonusDisplays impossible to desync from def.Divisor (a hand-maintained
+                // second copy previously went stale here: TeamworkFeat's divisor was corrected
+                // from 6 to 4 for RAW but the old manual table still said 6).
+                if (!def.SkipBonusDisplay)
+                {
+                    var displayKey = def.RewardSelectionGuid == null ? def.FeatureGuid : def.ProgressGuid;
+                    BonusDisplays[BlueprintGuid.Parse(displayKey)] = (def.Divisor, def.DisplayKind);
+                }
                 if (def.EffectGuid != null)
                 {
                     EffectGrants[BlueprintGuid.Parse(def.FeatureGuid)] = (def.Divisor, def.EffectGuid);
@@ -1351,6 +2011,11 @@ namespace WOTRFavoredClass
                          ("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b0c", 2), // old NaturalAC partial
                          ("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b0e", 3), // old NecroCL partial
                          ("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b10", 4), // old EnchDC partial
+                         ("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b55", 5), // old blanket FavoredEnemyAtkDmg counter
+                         // Divisor-1 bonus: its component moved onto the LayOnHandsSelf counter,
+                         // so this twin is no longer granted. Old saves keep the fact as an inert
+                         // hidden stub and get the same bonus from the counter instead.
+                         (LayOnHandsSelfEffectGuid, 6),
                      })
             {
                 FeatureConfigurator.New($"ZFCWRetiredPartial{idx}", retiredGuid)
@@ -1377,6 +2042,7 @@ namespace WOTRFavoredClass
                          (SlayerTalentRewardGuid, VanillaSlayerTalentSel),
                          (KineticistWildTalentRewardGuid, VanillaWildTalentSel),
                          (MagusArcanaRewardGuid, VanillaMagusArcanaSel),
+                         (EldritchArcanaRewardGuid, VanillaEldritchMagusArcanaSel),
                          ("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b6c", VanillaInquisitorTeamworkFeatSel),
                          ("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b70", MceAntipaladinCrueltySel),
                      })
@@ -1392,8 +2058,169 @@ namespace WOTRFavoredClass
                 ourSel.Group = sourceSel.Group;
             }
 
+            BuildFavoredEnemyPickPool();
+            BuildPatronSpellMap();
+
             GlobalBonusExtras = globalExtras;
             return extras;
+        }
+
+        // Fills the hobgoblin ranger reward selection with one feature per favored
+        // enemy type: +1 attack and damage against exactly that enemy, selectable only
+        // once you already have that favored enemy. Mirrors the original mod, which
+        // derives the same list from the vanilla favored enemy selection instead of
+        // enumerating creature types by hand — so third-party favored enemies are
+        // covered automatically.
+        private static void BuildFavoredEnemyPickPool()
+        {
+            var sourceSel = ResourcesLibrary.TryGetBlueprint<BlueprintFeatureSelection>(
+                BlueprintGuid.Parse(VanillaFavoriteEnemySel));
+            if (sourceSel?.m_AllFeatures == null)
+            {
+                Main.Log("Favored enemy selection missing — favored enemy pick pool left empty.");
+                return;
+            }
+
+            var picks = new List<Blueprint<BlueprintFeatureReference>>();
+            foreach (var enemyRef in sourceSel.m_AllFeatures)
+            {
+                var enemyFeature = enemyRef?.Get();
+                var favored = enemyFeature?.GetComponent<Kingmaker.UnitLogic.FactLogic.FavoredEnemy>();
+                if (favored?.m_CheckedFacts == null || favored.m_CheckedFacts.Length == 0) continue;
+
+                var pickGuid = MergeIds(enemyFeature.AssetGuid.ToString(), FavoredEnemyPickSeed);
+                var checkedFact = favored.m_CheckedFacts[0];
+                var conf = FeatureConfigurator.New($"ZFCWFavoredEnemyPick{enemyFeature.name}", pickGuid)
+                    .SetDisplayName(LocalizationTool.CreateString($"ZFCW.FEPick.{enemyFeature.name}.Name",
+                        $"Favored Enemy Bonus ({enemyFeature.Name})", tagEncyclopediaEntries: false))
+                    .SetDescription(LocalizationTool.CreateString($"ZFCW.FEPick.{enemyFeature.name}.Desc",
+                        "Add +1 to this favored enemy bonus.", tagEncyclopediaEntries: false))
+                    .SetIcon(enemyFeature.Icon)
+                    .SetIsClassFeature(true)
+                    // Only offered for a favored enemy the ranger actually has.
+                    .AddPrerequisiteFeature(enemyFeature.AssetGuid.ToString())
+                    .AddComponent<Kingmaker.Designers.Mechanics.Facts.AttackBonusAgainstFactOwner>(c =>
+                    {
+                        c.m_CheckedFact = checkedFact;
+                        c.AttackBonus = 1;
+                        c.Descriptor = Kingmaker.Enums.ModifierDescriptor.UntypedStackable;
+                    })
+                    .AddComponent<Kingmaker.Designers.Mechanics.Facts.DamageBonusAgainstFactOwner>(c =>
+                    {
+                        c.m_CheckedFact = checkedFact;
+                        c.DamageBonus = 1;
+                        c.Descriptor = Kingmaker.Enums.ModifierDescriptor.UntypedStackable;
+                    });
+                conf.Configure();
+                AllModGuids.Add(pickGuid);
+                AllModBlueprintGuids.Add(BlueprintGuid.Parse(pickGuid));
+                picks.Add(pickGuid);
+            }
+
+            FeatureSelectionConfigurator.For(FavoredEnemyPickRewardGuid)
+                .AddToAllFeatures(picks.ToArray())
+                // Instant Enemy makes any target count as a favored enemy; the original
+                // grants the same bonus against it, so a ranger's picks are not dead
+                // weight when using it.
+                .AddComponent<Kingmaker.Designers.Mechanics.Facts.AttackBonusAgainstFactOwner>(c =>
+                {
+                    c.m_CheckedFact = BlueprintTool.GetRef<BlueprintUnitFactReference>(InstantEnemyBuffGuid);
+                    c.AttackBonus = 1;
+                    c.Descriptor = Kingmaker.Enums.ModifierDescriptor.UntypedStackable;
+                })
+                .AddComponent<Kingmaker.Designers.Mechanics.Facts.DamageBonusAgainstFactOwner>(c =>
+                {
+                    c.m_CheckedFact = BlueprintTool.GetRef<BlueprintUnitFactReference>(InstantEnemyBuffGuid);
+                    c.DamageBonus = 1;
+                    c.Descriptor = Kingmaker.Enums.ModifierDescriptor.UntypedStackable;
+                })
+                .Configure();
+            Main.Log($"Favored enemy pick pool: {picks.Count} enemy types.");
+        }
+
+        // Resolves a class's own currently-configured spell list guid (mirrors ZFC's
+        // own "wizard.Spellbook.SpellList" access) rather than a separately-looked-up
+        // named ref, so it stays correct even if some other mod ever swaps the base
+        // class's list.
+        private static string ClassSpellListGuid(string classGuid) =>
+            BlueprintTool.Get<BlueprintCharacterClass>(classGuid)?.Spellbook?.SpellList?.AssetGuid.ToString();
+
+        // Builds a custom spell list by filtering/combining already-loaded native
+        // class lists — same technique real WOTR mods use (PrestigePlus's
+        // GraveSpellList.cs, EbonsContentMod's FaithMagic.cs): read each source
+        // list's SpellsByLevel, keep spells matching predicate, dedupe by guid, write
+        // into a fresh list. Used for the race-specific "bonus known spell" variants
+        // (Ganzi/Oracle, Goblin/Sorcerer, Shaman) that ZFC built via Kingmaker-only
+        // CotW helpers we don't have access to.
+        private static void BuildFilteredSpellList(string name, string guid, int maxLevel,
+            Func<BlueprintAbility, bool> predicate, params BlueprintSpellList[] sources)
+        {
+            var levels = new SpellLevelList[maxLevel + 1];
+            for (int i = 0; i <= maxLevel; i++) levels[i] = new SpellLevelList(i);
+            var spellList = SpellListConfigurator.New(name, guid)
+                .AddToSpellsByLevel(levels)
+                .SetFilterByMaxLevel(maxLevel)
+                .Configure();
+
+            var seen = new HashSet<string>();
+            foreach (var source in sources)
+            {
+                if (source?.SpellsByLevel == null) continue;
+                for (int i = 0; i <= maxLevel && i < source.SpellsByLevel.Length; i++)
+                {
+                    foreach (var spell in source.SpellsByLevel[i].Spells)
+                    {
+                        if (spell == null || !predicate(spell)) continue;
+                        if (!seen.Add(spell.AssetGuid.ToString())) continue;
+                        spellList.SpellsByLevel[i].m_Spells.Add(spell.ToReference<BlueprintAbilityReference>());
+                    }
+                }
+            }
+            AllModGuids.Add(guid);
+        }
+
+        // Builds N parametrized "learn a bonus known spell of level i" features
+        // (levels 1..maxLevel) — the wrapper reward selection's AllFeatures for a
+        // "bonus known spell" entry. Gated so a level-i slot only unlocks once the
+        // character can already cast level (i+1) spells, matching ZFC's "at least 1
+        // level below the highest spell level you can cast." levelGuids[level-1] is
+        // this entry's own fixed, independently-generated guid for that level (see the
+        // guid-array fields above). extraPrereq lets the Wizard Thassilonian Specialist
+        // tracks add archetype-specific gating on top.
+        private static List<string> BuildKnownSpellRewardFeatures(
+            string keyPrefix, string[] levelGuids, string classGuid, int maxLevel, string spellListGuid,
+            string levelNoun = "Spell", Action<ParametrizedFeatureConfigurator> extraPrereq = null)
+        {
+            var guids = new List<string>();
+            for (int level = 1; level <= maxLevel; level++)
+            {
+                var guid = levelGuids[level - 1];
+                var levelName = LocalizationTool.CreateString($"ZFCW.{keyPrefix}L{level}.Name",
+                    $"Learn a Bonus Level {level} {levelNoun}", tagEncyclopediaEntries: false);
+                var levelDesc = LocalizationTool.CreateString($"ZFCW.{keyPrefix}L{level}.Desc",
+                    $"Learn one additional level {level} {levelNoun.ToLowerInvariant()}. This {levelNoun.ToLowerInvariant()} must be at least 1 level below the highest level the character can cast.",
+                    tagEncyclopediaEntries: false);
+                var conf = ParametrizedFeatureConfigurator.New($"ZFCW{keyPrefix}L{level}", guid)
+                    .SetDisplayName(levelName)
+                    .SetDescription(levelDesc)
+                    .SetIsClassFeature(true)
+                    .SetHideNotAvailibleInUI(true)
+                    .SetRanks(20)
+                    .SetParameterType(FeatureParameterType.LearnSpell)
+                    .SetSpellcasterClass(classGuid)
+                    .SetSpellList(spellListGuid)
+                    .SetSpecificSpellLevel(true)
+                    .SetSpellLevel(level)
+                    .SetSpellLevelPenalty(0)
+                    .AddLearnSpellParametrized(specificSpellLevel: true, spellcasterClass: classGuid,
+                        spellLevel: level, spellLevelPenalty: 0, spellList: spellListGuid)
+                    .AddPrerequisiteClassSpellLevel(classGuid, requiredSpellLevel: level + 1);
+                extraPrereq?.Invoke(conf);
+                conf.Configure();
+                AllModGuids.Add(guid);
+                guids.Add(guid);
+            }
+            return guids;
         }
 
         private static List<string> GlobalBonusExtras = new();
