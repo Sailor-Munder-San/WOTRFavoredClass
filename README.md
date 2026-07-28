@@ -12,14 +12,23 @@ Roleplaying Game rules.
 
 ## Status
 
-This is an initial public release. A large majority of the original mod's ~91 favored class
-bonuses are ported (universal HP/skill bonuses, racial PnP bonuses, resource pool bonuses,
-"1/6 of a new talent" wrapper bonuses, concentration, combat maneuvers, energy resistance,
-spell/ability damage, favored-enemy bonuses, and animal companion bonuses). A smaller set is
-deliberately deferred (bonus known spells, Lay on Hands, a few archetype-specific variants)
-because they need either a dedicated subsystem or hands-on in-game verification before
-shipping. See **[BONUS-MATRIX.md](BONUS-MATRIX.md)** for the full per-bonus breakdown,
-including exactly which races/GUIDs are used and why specific bonuses are deferred.
+Current release: **v0.1.2**. Essentially all of the original mod's ~91 favored class bonuses
+that have a counterpart in WOTR are ported — universal HP/skill bonuses, racial PnP bonuses,
+resource pool bonuses, "1/6 of a new talent" wrapper bonuses, concentration, combat maneuvers,
+energy resistance, spell/ability damage, favored-enemy bonuses, animal companion bonuses, and
+as of v0.1.2 also bonus known spells (12 classes), Lay on Hands, Wild Shape natural armor,
+Channel Energy / Fervor / Harm Undead, Eldritch Scion arcana, Arcane Reservoir regeneration and
+patron spell caster level.
+
+What remains unported is what the game cannot express: classes that do not exist in WOTR or its
+mods (Psychic, Occultist, Investigator, Spiritualist, Summoner), the kineticist internal buffer
+(burn was reworked), and a couple of archetype-specific spellbook variants. A few bonuses whose
+tabletop wording has no mechanical equivalent in the game were given the closest available
+substitute instead, which is called out explicitly where it applies.
+
+See **[BONUS-MATRIX.md](BONUS-MATRIX.md)** for the full per-bonus breakdown, including exactly
+which races/GUIDs are used, which bonuses are deferred and why, and the known fidelity gaps
+where this port knowingly differs from the tabletop rules or from the original mod.
 
 ## Installation
 
