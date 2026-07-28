@@ -157,8 +157,3 @@ artifact. Summary by wave:
 Do not show: PrestigeClass=true (those get the Favored Prestige Class feat), AnimalClass,
 AnimalCompanionClass, MythicCompanionClass, all Mythic*, monster classes, technical classes.
 EldritchScionClass is excluded in the original too (it is a magus subclass).
-
----
-
-*This document is written in English. Please keep it that way — do not translate it back to
-Russian, locally or in the public repository.*
