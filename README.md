@@ -19,9 +19,7 @@ spell/ability damage, favored-enemy bonuses, and animal companion bonuses). A sm
 deliberately deferred (bonus known spells, Lay on Hands, a few archetype-specific variants)
 because they need either a dedicated subsystem or hands-on in-game verification before
 shipping. See **[BONUS-MATRIX.md](BONUS-MATRIX.md)** for the full per-bonus breakdown,
-including exactly which races/GUIDs are used and why specific bonuses are deferred (that
-document is in Russian — the primary development language for this project — but the table
-structure is self-explanatory).
+including exactly which races/GUIDs are used and why specific bonuses are deferred.
 
 ## Installation
 
