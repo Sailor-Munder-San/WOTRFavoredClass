@@ -112,6 +112,77 @@ artifact. Summary by wave:
     of all patron spells (almost always an immediate exit), and only for an actual patron spell
     is it checked which patron it belongs to.
 
+- **Wave 9**: where the favored class pick itself lives, and half-elf Multitalented.
+  The pick is now attached to every playable **race** (`ProgressionRoot.CharacterRaces`,
+  skipping `HideInUI`), so it is made right after the race is chosen and a character has a
+  favored class from the start. A half-elf simply carries two selections instead of one.
+  - Both selections carry `FeatureGroup.Racial`, which is what actually decides *where* in
+    chargen they appear: `CharGenFeatureSelectorPhaseVM.GetFeaturePriority` maps `Racial` and
+    the heritage groups to the `RaceFeatures` phase and everything else to `Features`, which
+    sits after ability scores and skills. Attaching to the race is not enough on its own — an
+    ungrouped selection still ends up stranded at the far end of chargen. Within one phase the
+    order follows the level-up state index, so appending the main pick before Multitalented
+    gives: racial heritage, favored class, Multitalented.
+  - It got there in two steps. Originally it was on the level-1 entry of *every* class, which
+    meant it came back whenever a character multiclassed — and since every option was gated on
+    the "already chosen" marker, that repeat card had no selectable option at all. Moving it to
+    `BasicFeatsProgression` (`5b72dd2c...`, the anchor the original mod uses) fixed the repeat,
+    because that progression has no class restriction and so fires once at character level 1 —
+    but it is processed late in chargen, far from the race step, while Multitalented (hanging
+    off the race) appeared immediately after the race was picked. Races are the better anchor
+    for both, and `CharacterRaces` covers races added by other mods while excluding monster
+    and pet races.
+  - With the pick offered only once, the marker prerequisites became unnecessary and were
+    removed — which is also what makes a second pick possible. Taking the same class twice is
+    still impossible without any explicit check: a `BlueprintProgression` is not an
+    `IFeatureSelection`, so `MeetsPrerequisites` rejects it as soon as its rank reaches `Ranks`
+    (1). `ZFCWNoFavoredClass` got `Ranks = 2` so a half-elf can decline both slots.
+  - Multitalented is a second `BlueprintFeatureSelection` carrying the same options, appended
+    to the half-elf race's `m_Features` rather than to a progression — races grant their
+    features during chargen, exactly when the second choice is due, and this keeps the option
+    off every other race without a race prerequisite. Same technique as the original, which
+    copies its favored class selection onto the half-elf.
+  - It is deliberately NOT registered in `BonusSelectionGuids`: that set drives the level-up
+    patch that re-anchors a per-class *bonus* card behind its favored class pick, and a second
+    class pick would compete with the bonus card for the same slot.
+  - Pets are excluded at the source. An animal companion levels a real character class and
+    gets the basic feat progression too, so it was being offered a favored class of its own.
+    A prefix on `LevelUpState.AddSelection` drops our selection outright when
+    `LevelUpState.Unit.Unit.IsPet`, so no dead card is queued at all.
+  - Which classes may be favored is now decided by `IsFavoredClassCandidate`, testing the
+    same native flags the game's own class-selection screen uses (`CharGenClassPhaseVM`
+    filters on `HideInUI`): skip `PrestigeClass`, `IsMythic` and `HideInUI`. Classes added by
+    other mods are judged by that rule rather than needing to be listed. The explicit
+    `ExcludedClasses` list is kept as a backstop for the pet/summon/monster/technical classes
+    that actually turn up on player-controlled units. Previously only `PrestigeClass` and
+    Eldritch Scion were filtered, so the documented rule below was not actually enforced.
+  - A pick is re-sourced to its own class. The sheet's class panel is built from
+    `GetClassProgressions(cls)`, which keeps a fact only when `Feature.GetSourceClass()` is
+    that class, and `GetSourceClass` just reads the fact's source. While the selection lived
+    on each class's level-1 entry the source was that class; hanging it off the basic feat
+    progression made every pick share one unrelated source, so picks landed in the wrong
+    place and a half-elf's two picks collapsed onto one. The `SelectFeature.Apply` postfix
+    now calls `SetSource` with the class the picked progression belongs to.
+  - Placement within a class block is forced. `GetClassProgressions` returns progressions in
+    the order their facts were added to the unit, so the favored class block sat above or
+    below the class features depending on which came first — a half-elf picks both favored
+    classes during chargen but levels the second class much later, so for that class the
+    favored class fact predated the class itself. A postfix sorts this mod's progressions to
+    the end of that array, leaving everything else in place.
+
+- **Performance note — never call `RemoveModifiers` from inside a stat recalculation.** The
+  patch that strips WOTR's automatic favored class hit points hangs off
+  `ModifiableValueHitPoints.UpdateInternalModifiers`, and used to call the public
+  `RemoveModifiers`. That method ends in `UpdateValue()`, which is exactly the method already
+  running — `UpdateValue` calls `UpdateInternalModifiers()` first and `ApplyModifiersFiltered()`
+  afterwards. So every hit point update kicked off a second, nested recalculation of the value,
+  of every dependent `ModifiableValue`, and of the dependent facts and components, for every
+  party member, every time anything touched their stats. The patch now removes the entry from
+  `ModifierList` directly and calls `PrepareForRemoval` on each modifier — the same steps
+  `RemoveModifiers` performs, minus the trailing `UpdateValue()` — so the pass already in flight
+  picks the removal up. Verified by IL inspection that `UpdateInternalModifiers` has no caller
+  other than `UpdateValue` for this type.
+
 ## Deferred (with reasons)
 
 | Bonus | Reason |
@@ -123,6 +194,11 @@ artifact. Summary by wave:
 | Psychic/Occultist/Investigator/Spiritualist/Summoner — everything | The classes are absent from WOTR and the installed mods |
 
 ## Known fidelity gaps
+
+- Both favored class selections are granted through race blueprints, and race features are
+  applied at character creation. Characters that already exist in a save therefore keep
+  whatever they were given by the arrangement in force when they were made; the race-anchored
+  pick, and the half-elf's second slot, apply to newly created characters only.
 
 - Acid Spell Damage (Dwarf/Oread Sorcerer): ZFC used `Acid | Ground`; the Ground descriptor
   does not exist in WOTR (it is a CotW custom) — only the Acid component was ported.

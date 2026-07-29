@@ -178,7 +178,14 @@ namespace WOTRFavoredClass
         public override bool CheckInternal(FeatureSelectionState selectionState, UnitDescriptor unit, LevelUpState state)
         {
             var race = unit.Progression.Race;
-            return race != null && m_Races.Any(r => r.Get() == race);
+            if (race == null) return false;
+            // Plain loop, no closure: the level-up screen re-evaluates every option's
+            // prerequisites on each refresh, and this gate sits on most of our entries.
+            for (int i = 0; i < m_Races.Length; i++)
+            {
+                if (m_Races[i].Get() == race) return true;
+            }
+            return false;
         }
 
         public override string GetUITextInternal(UnitDescriptor unit)
@@ -204,14 +211,28 @@ namespace WOTRFavoredClass
 
         public override string GetUITextInternal(UnitDescriptor unit)
         {
-            var bp = m_Fact?.Get();
-            int rank = 0;
-            if (bp != null)
-            {
-                var fact = unit.Facts.m_Facts.FirstOrDefault(f => f.Blueprint == bp);
-                rank = fact?.GetRank() ?? 0;
-            }
+            int rank = FactRanks.Of(unit, m_Fact);
             return $"Progress toward next bonus: {rank % Step}/{Step}";
+        }
+    }
+
+    // Rank of a fact on a unit, without a closure. The level-up screen re-evaluates
+    // prerequisites for every option on every refresh, and the rank-cycle gate below asks
+    // for two ranks per evaluation — each one a scan of the unit's whole fact list, which
+    // for a high-level character is hundreds of entries.
+    internal static class FactRanks
+    {
+        public static int Of(UnitDescriptor unit, BlueprintUnitFactReference bpRef)
+        {
+            var bp = bpRef?.Get();
+            if (bp == null || unit == null) return 0;
+            var facts = unit.Facts.m_Facts;
+            for (int i = 0; i < facts.Count; i++)
+            {
+                var fact = facts[i];
+                if (fact != null && fact.Blueprint == bp) return fact.GetRank();
+            }
+            return 0;
         }
     }
 
@@ -228,13 +249,7 @@ namespace WOTRFavoredClass
         public int Divisor = 6;
         public bool Not;
 
-        static int RankOf(UnitDescriptor unit, BlueprintUnitFactReference bpRef)
-        {
-            var bp = bpRef?.Get();
-            if (bp == null) return 0;
-            var fact = unit.Facts.m_Facts.FirstOrDefault(f => f.Blueprint == bp);
-            return fact?.GetRank() ?? 0;
-        }
+        static int RankOf(UnitDescriptor unit, BlueprintUnitFactReference bpRef) => FactRanks.Of(unit, bpRef);
 
         public override bool CheckInternal(FeatureSelectionState selectionState, UnitDescriptor unit, LevelUpState state)
         {

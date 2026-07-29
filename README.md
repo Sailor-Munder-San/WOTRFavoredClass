@@ -12,13 +12,17 @@ Roleplaying Game rules.
 
 ## Status
 
-Current release: **v0.1.2**. Essentially all of the original mod's ~91 favored class bonuses
+Current release: **v0.1.3**. Essentially all of the original mod's ~91 favored class bonuses
 that have a counterpart in WOTR are ported — universal HP/skill bonuses, racial PnP bonuses,
 resource pool bonuses, "1/6 of a new talent" wrapper bonuses, concentration, combat maneuvers,
-energy resistance, spell/ability damage, favored-enemy bonuses, animal companion bonuses, and
-as of v0.1.2 also bonus known spells (12 classes), Lay on Hands, Wild Shape natural armor,
-Channel Energy / Fervor / Harm Undead, Eldritch Scion arcana, Arcane Reservoir regeneration and
-patron spell caster level.
+energy resistance, spell/ability damage, favored-enemy bonuses, animal companion bonuses,
+bonus known spells (12 classes), Lay on Hands, Wild Shape natural armor, Channel Energy /
+Fervor / Harm Undead, Eldritch Scion arcana, Arcane Reservoir regeneration and patron spell
+caster level.
+
+The favored class is chosen at the race step of character creation, and half-elves get the
+**Multitalented** racial trait — two favored classes, either of which pays out whenever they
+take a level in it.
 
 What remains unported is what the game cannot express: classes that do not exist in WOTR or its
 mods (Psychic, Occultist, Investigator, Spiritualist, Summoner), the kineticist internal buffer

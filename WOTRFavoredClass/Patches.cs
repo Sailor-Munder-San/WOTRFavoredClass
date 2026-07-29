@@ -17,6 +17,23 @@ namespace WOTRFavoredClass
     [HarmonyPatch(typeof(LevelUpState), nameof(LevelUpState.AddSelection))]
     internal static class LevelUpState_AddSelection_Patch
     {
+        // Animal companions and other pets level real character classes, and the basic
+        // feat progression our favored class pick hangs off applies to them as well — so
+        // without this they get offered a favored class of their own. A pet has no
+        // business having one, and its bonus options are written for player characters.
+        // Dropping the selection here (rather than emptying it) means no dead card is
+        // left in the level-up queue at all.
+        [HarmonyPrefix]
+        static bool Prefix(LevelUpState __instance, IFeatureSelection selection, ref FeatureSelectionState __result)
+        {
+            if (selection is not BlueprintFeatureSelection bp) return true;
+            var guid = bp.AssetGuid.ToString();
+            if (guid != FavoredClasses.SelectionGuid && guid != FavoredClasses.MultitalentedGuid) return true;
+            if (__instance?.Unit?.Unit?.IsPet != true) return true;
+            __result = null;
+            return false;
+        }
+
         [HarmonyPostfix]
         static void Postfix(LevelUpState __instance, FeatureSelectionState parent, IFeatureSelection selection, FeatureSelectionState __result)
         {
@@ -115,6 +132,24 @@ namespace WOTRFavoredClass
             int level = state?.NextCharacterLevel ?? unit.Progression.CharacterLevel;
             var source = (Kingmaker.UnitLogic.FeatureSource)BlueprintCore.Utils.BlueprintTool.Get<BlueprintProgression>(FavoredClasses.SourceMarkerGuid);
 
+            // A favored class pick has to be attributed to the class it is for, or the
+            // character sheet will not file it under that class: the progression panel is
+            // built from GetClassProgressions(cls), which keeps a fact only when
+            // Feature.GetSourceClass() is that class, and GetSourceClass just reads the
+            // fact's source. Left alone, the source is whatever granted the selection —
+            // the same one for every pick — so a half-elf's two picks would collapse onto
+            // a single class instead of appearing under each.
+            if (FavoredClasses.FavoredClassProgressionClass.TryGetValue(guid, out var ownerClassGuid))
+            {
+                var ownerClass = BlueprintCore.Utils.BlueprintTool.Get<BlueprintCharacterClass>(ownerClassGuid);
+                var pickedFact = unit.Progression.Features.GetFact(picked);
+                if (ownerClass != null && pickedFact != null)
+                {
+                    pickedFact.SetSource((Kingmaker.UnitLogic.FeatureSource)ownerClass, level);
+                }
+                return;
+            }
+
             if (FavoredClasses.RewardPickCounters.TryGetValue(guid, out var counterGuid))
             {
                 var counterBp = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(counterGuid);
@@ -170,6 +205,72 @@ namespace WOTRFavoredClass
         }
     }
 
+    // The character sheet lists a class's progressions in the order their facts were added
+    // to the unit, so where the favored class block lands depends purely on which came
+    // first. A half-elf picks both favored classes during chargen but usually levels the
+    // second class much later, so for that class the favored class fact predates the class
+    // itself and the block is drawn ABOVE the class features, while for the first class it
+    // is drawn below. Sorting this mod's progressions to the end makes the block sit under
+    // the class features every time. Only our own blueprints move; the relative order of
+    // everything else is preserved.
+    [HarmonyPatch(typeof(Kingmaker.UnitLogic.UnitProgressionData), nameof(Kingmaker.UnitLogic.UnitProgressionData.GetClassProgressions))]
+    internal static class UnitProgressionData_GetClassProgressions_Patch
+    {
+        [HarmonyPostfix]
+        static void Postfix(ref Kingmaker.UnitLogic.ProgressionData[] __result)
+        {
+            if (__result == null || __result.Length < 2) return;
+
+            // Stable partition in place. GetClassProgressions builds its result with
+            // ToArray(), so this array is freshly allocated and nobody else holds it —
+            // reordering it costs nothing, where allocating a replacement would add garbage
+            // to every call, and the character sheet calls this per class per refresh.
+            int insert = 0;
+            for (int i = 0; i < __result.Length; i++)
+            {
+                if (IsOurs(__result[i])) continue;
+                if (insert != i)
+                {
+                    var moved = __result[i];
+                    for (int j = i; j > insert; j--) __result[j] = __result[j - 1];
+                    __result[insert] = moved;
+                }
+                insert++;
+            }
+        }
+
+        static bool IsOurs(Kingmaker.UnitLogic.ProgressionData data)
+        {
+            var bp = data?.Blueprint;
+            return bp != null && FavoredClasses.AllModBlueprintGuids.Contains(bp.AssetGuid);
+        }
+    }
+
+    // A stat breakdown labels each modifier by its source: the source fact's own display name
+    // when the modifier has one, otherwise the modifier descriptor's name — which is why our
+    // untyped bonuses read "Other" and the hit point bonus read "Bonus Hit Point". Neither
+    // tells the player the bonus came from their favored class. Relabel any modifier whose
+    // source is one of this mod's facts.
+    //
+    // This is the inner overload, reached from GetBonusSourceText(Modifier) once it has
+    // established the modifier has a source; the overload has to be named explicitly because
+    // the method is overloaded. UI-only path, evaluated when a breakdown tooltip is built.
+    [HarmonyPatch(typeof(Kingmaker.UI.Common.StatModifiersBreakdown),
+        nameof(Kingmaker.UI.Common.StatModifiersBreakdown.GetBonusSourceText),
+        new[] { typeof(Kingmaker.UI.IUIDataProvider), typeof(bool) })]
+    internal static class StatModifiersBreakdown_GetBonusSourceText_Patch
+    {
+        [HarmonyPostfix]
+        static void Postfix(Kingmaker.UI.IUIDataProvider source, ref string __result)
+        {
+            if (source is not EntityFact fact) return;
+            var blueprint = fact.Blueprint;
+            if (blueprint == null) return;
+            if (!FavoredClasses.AllModBlueprintGuids.Contains(blueprint.AssetGuid)) return;
+            __result = FavoredClasses.BonusSourceLabel;
+        }
+    }
+
     // WOTR silently grants +1 HP per level of the character's highest base class
     // (ModifiableValueHitPoints.UpdateInternalModifiers adds a modifier with
     // ModifierDescriptor.FavouredClassBonus on every stat update). Our mod replaces
@@ -185,7 +286,22 @@ namespace WOTRFavoredClass
         {
             var owner = __instance.Owner;
             if (owner == null || !owner.IsPlayerFaction) return;
-            __instance.RemoveModifiers(ModifierDescriptor.FavouredClassBonus);
+
+            // Drop the modifier out of the list directly instead of calling
+            // RemoveModifiers. That method ends in UpdateValue(), and we are already inside
+            // UpdateValue: it runs UpdateInternalModifiers() (this patch) and only then
+            // ApplyModifiersFiltered(), so a removal made here is picked up by the pass
+            // already in flight. Going through the public method instead started a second,
+            // nested recalculation — of this value, of every dependent ModifiableValue, and
+            // of the dependent facts and components — on every single HP update, for every
+            // party member, every time anything touched their stats. The steps below are
+            // exactly what RemoveModifiers does, minus that trailing UpdateValue().
+            if (!__instance.ModifierList.TryGetValue(ModifierDescriptor.FavouredClassBonus, out var mods)) return;
+            __instance.ModifierList.Remove(ModifierDescriptor.FavouredClassBonus);
+            for (int i = 0; i < mods.Count; i++)
+            {
+                __instance.PrepareForRemoval(mods[i]);
+            }
         }
     }
 }

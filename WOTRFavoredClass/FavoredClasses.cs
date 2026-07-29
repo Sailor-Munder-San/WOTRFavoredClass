@@ -32,6 +32,13 @@ namespace WOTRFavoredClass
         // for facts this mod grants outside the level-up selection flow (which would
         // otherwise set source automatically). Never granted as a fact itself.
         internal const string SourceMarkerGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b1c";
+        // What a stat breakdown should call a modifier that came from this mod. Without it the
+        // breakdown shows the individual feature's own name ("Bonus Hit Point"), which says
+        // nothing about where the bonus came from.
+        internal const string BonusSourceLabel = "Favored Class Bonus";
+        // Half-elf Multitalented: a SECOND favored class selection, carrying the same
+        // options as the first. Attached to the half-elf race rather than to a progression.
+        internal const string MultitalentedGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bbd";
 
         private const string WarpriestClassGuid = "30b5e47d47a0e37438cc5a80c96cfb99";
         private const string VanillaWarpriestFeatSel = "303fd456ddb14437946e344bad9a893b";
@@ -366,7 +373,6 @@ namespace WOTRFavoredClass
         private const string ProgressionSeed = "602ea6032c324258a183588f84522ea1";
         private const string BonusSelectionSeed = "f431abc7ab7b4771a58fff7ee2af8a01";
 
-        private const string BasicFeatsProgressionGuid = "5b72dd2ca2cb73b49903806ee8986325";
 
         // Guids of all per-class bonus selections — used by the level-up queue patch
         // to glue each bonus card right behind its favored-class pick card.
@@ -390,6 +396,14 @@ namespace WOTRFavoredClass
         // Wrapper reward selection -> its pick-counter feature: a reward pick also
         // counts as a pick, so the counter always shows the true number of picks.
         internal static readonly Dictionary<BlueprintGuid, string> RewardPickCounters = new();
+
+        // Per-class favored class progression -> the class it belongs to. The character
+        // sheet groups progressions with GetClassProgressions(cls), which matches on
+        // Feature.GetSourceClass(); that reads the fact's source and casts it to a
+        // character class. A pick made from our selection would otherwise be sourced to
+        // whatever granted the selection, so the entry has to be re-sourced to its class
+        // for the sheet to file it under that class (see the SelectFeature patch).
+        internal static readonly Dictionary<BlueprintGuid, string> FavoredClassProgressionClass = new();
 
         // Witch patron progression -> the spells that patron grants, read out of the
         // patron progressions' own AddKnownSpell components at install time.
@@ -457,7 +471,44 @@ namespace WOTRFavoredClass
         private static readonly HashSet<string> ExcludedClasses = new()
         {
             "f5b8c63b141b2f44cbb8c2d7579c34f5", // EldritchScionClass — magus subclass, excluded in the original too
+            // Pet / summon / monster / technical classes. The flag test below already
+            // catches these, but they are listed explicitly because they are the ones that
+            // actually turn up on a player-controlled unit (an animal companion levels a
+            // real class), and a wrong flag on any of them would be silent.
+            "4cd1757a0eea7694ba5c933729a53920", // AnimalClass
+            "26b10d4340839004f960f9816f6109fe", // AnimalCompanionClass
+            "530b6a79cb691c24ba99e1577b4beb6d", // MythicCompanionClass
+            "e40e01860956b8b4d80059d4437996f5", // AberrationClass
+            "fd66bdea5c33e5f458e929022322e6bf", // ConstructClass
+            "c91a49b104e94b7ab806bf6120f98f05", // DLC3_UniqueConstructClass
+            "01a754e7c1b7c5946ba895a5ff0faffc", // DragonClass
+            "f2e6e760ead99fb48ade27c7e9d4ac94", // FeyClass
+            "6ab4526f94d2e3e439af0599a29b6675", // HumanoidClass
+            "b9e97f47cb86f2d45a0784a096ff8037", // MagicalBeastClass
+            "8a3c86893f383214da070e9c84c1e95b", // MonstrousHumanoidClass
+            "9a20b40b57f4e684fa20d17c0edfd5ba", // NymphClass
+            "92ab5f2fe00631b44810deffcc1a97fd", // OutsiderClass
+            "9393cc36ea29d084bab7433e3a28d40b", // PlantClass
+            "fb7a0be8af1d405e8387648ad8513c9c", // PrototypeClass
+            "19a2d9e58d916d04db4cd7ad2c7a3ee2", // UndeadClass
+            "d1a15612d1a96334d94edf5f1d3b8d29", // VerminClass
+            "b2d9af52cf680744eb0cdc3f3034395f", // WarriorClass
+            "96a850e939904ca3ac8431d55318e7c6", // BardClass_Penta (technical duplicate)
+            "b82f1fbd191e1f2498266ca41f05027f", // FakeLegendClass
         };
+
+        // A class may be a favored class only if a player could pick it at chargen. The
+        // flag test mirrors what the game's own class-selection screen uses
+        // (CharGenClassPhaseVM filters on HideInUI), so classes added by other mods are
+        // judged by the same rule instead of needing to be listed here.
+        private static bool IsFavoredClassCandidate(BlueprintCharacterClass cls)
+        {
+            if (cls == null) return false;
+            if (cls.PrestigeClass) return false;   // these get the Favored Prestige Class feat instead
+            if (cls.IsMythic) return false;
+            if (cls.HideInUI) return false;
+            return !ExcludedClasses.Contains(cls.AssetGuid.ToString());
+        }
 
         public static void Install()
         {
@@ -512,6 +563,15 @@ namespace WOTRFavoredClass
                 "The choice of favored class cannot be changed once the character is created. Prestige classes can never be a favored class.",
                 tagEncyclopediaEntries: false);
 
+            // The reward taken on each level of the favored class, as opposed to the choice
+            // of the class itself.
+            var bonusSelectionName = LocalizationTool.CreateString("ZFCW.BonusSelection.Name",
+                "Favored Class Bonus", tagEncyclopediaEntries: false);
+            var bonusSelectionDesc = LocalizationTool.CreateString("ZFCW.BonusSelection.Desc",
+                "Whenever a character gains a level in his favored class, he receives either +1 hit point or +1 skill rank. " +
+                "Members of some races may instead select an alternate racial bonus.",
+                tagEncyclopediaEntries: false);
+
             // Hidden marker: granted together with any favored class pick; blocks the
             // selection from re-appearing when multiclassing into another class at its level 1.
             FeatureConfigurator.New("ZFCWFavoredClassChosenMarker", MarkerGuid)
@@ -525,9 +585,8 @@ namespace WOTRFavoredClass
             var progressionGuids = new List<string>();
             foreach (var cls in BlueprintRoot.Instance.Progression.CharacterClasses)
             {
-                if (cls == null || cls.PrestigeClass) continue;
+                if (!IsFavoredClassCandidate(cls)) continue;
                 var clsGuid = cls.AssetGuid.ToString();
-                if (ExcludedClasses.Contains(clsGuid)) continue;
 
                 var bonusSelGuid = MergeIds(clsGuid, BonusSelectionSeed);
                 var progGuid = MergeIds(clsGuid, ProgressionSeed);
@@ -535,9 +594,12 @@ namespace WOTRFavoredClass
                 var bonusItems = new List<string> { HpFeatureGuid, SkillFeatureGuid };
                 if (classExtras.TryGetValue(clsGuid, out var extras)) bonusItems.AddRange(extras);
                 bonusItems.AddRange(GlobalBonusExtras);
+                // Named apart from the favored class pick itself: this card is the per-level
+                // reward, and two steps both called "Favored Class" read as the same one
+                // asked twice.
                 FeatureSelectionConfigurator.New($"ZFCWFavoredClass{cls.name}BonusSelection", bonusSelGuid)
-                    .SetDisplayName(selectionName)
-                    .SetDescription(selectionDesc)
+                    .SetDisplayName(bonusSelectionName)
+                    .SetDescription(bonusSelectionDesc)
                     .SetIsClassFeature(true)
                     .AddToAllFeatures(bonusItems.Select(g => (Blueprint<BlueprintFeatureReference>)g).ToArray())
                     .Configure();
@@ -565,22 +627,28 @@ namespace WOTRFavoredClass
                     .SetDescription(selectionDesc)
                     .SetIsClassFeature(true)
                     .SetClasses(clsGuid)
-                    .AddPrerequisiteNoFeature(MarkerGuid)
+                    // No marker prerequisite: the selection is offered once, at character
+                    // level 1, so nothing can re-offer it — and gating on the marker would
+                    // block the half-elf's SECOND pick (Multitalented), which draws from
+                    // this same item list. Taking one class twice is already impossible: a
+                    // progression is not an IFeatureSelection, so MeetsPrerequisites rejects
+                    // it once its rank reaches Ranks (1).
                     .AddToLevelEntry(1, bonusSelGuid, MarkerGuid)
                     .AddToLevelEntries(bonusSelGuid, from: 2)
                     .Configure();
 
                 progressionGuids.Add(progGuid);
+                FavoredClassProgressionClass[BlueprintGuid.Parse(progGuid)] = clsGuid;
             }
 
-            // Explicit opt-out: grants nothing but the marker, so the choice never
-            // re-appears on later multiclassing either.
+            // Explicit opt-out. Two ranks so a half-elf, who picks twice, can decline both
+            // slots; the marker is still granted as the "has chosen" flag.
             FeatureConfigurator.New("ZFCWNoFavoredClass", NoneFeatureGuid)
                 .SetDisplayName(LocalizationTool.CreateString("ZFCW.None.Name", "No Favored Class", tagEncyclopediaEntries: false))
                 .SetDescription(LocalizationTool.CreateString("ZFCW.None.Desc",
                     "You have no favored class and receive no favored class bonuses.", tagEncyclopediaEntries: false))
                 .SetIsClassFeature(true)
-                .AddPrerequisiteNoFeature(MarkerGuid)
+                .SetRanks(2)
                 .AddFacts(new() { MarkerGuid })
                 .Configure();
 
@@ -588,25 +656,91 @@ namespace WOTRFavoredClass
                 .SetDisplayName(selectionName)
                 .SetDescription(selectionDesc)
                 .SetIsClassFeature(true)
+                // Chargen sorts a selection into a phase by its feature group:
+                // CharGenFeatureSelectorPhaseVM.GetFeaturePriority maps Racial and the
+                // various heritage groups to the RaceFeatures phase and everything else to
+                // Features, which sits after ability scores and skills. Without a group the
+                // pick was stranded at the far end of chargen, while Multitalented — which
+                // carries Racial — sat right after the racial heritage step. Same group here
+                // puts them together, in m_Features order: heritage, favored class, then
+                // Multitalented.
+                .SetGroup(Kingmaker.Blueprints.Classes.FeatureGroup.Racial)
                 .AddToAllFeatures(progressionGuids.Select(g => (Blueprint<BlueprintFeatureReference>)g)
                     .Append(NoneFeatureGuid).ToArray())
                 .Configure();
 
-            // Attach the selection to the END of each class's own level-1 progression
-            // entry: class selections are processed last in chargen, so the favored
-            // class pick and its bonus pick appear together as the final two cards.
+            // Attach the selection to every playable RACE, not to a class and not to the
+            // basic feat progression.
+            //
+            // Per class was wrong outright: a class's level 1 is reached again whenever the
+            // character multiclasses, so the pick card came back at, say, Fighter 1 of a
+            // level-8 wizard, with every option already spent and nothing selectable on it.
+            //
+            // The basic feat progression fixed that — it has no class restriction, so its
+            // level tracks character level and the entry fires once — but it is processed
+            // late in chargen, so the pick landed far away from the race step. The half-elf's
+            // second pick hangs off the race and therefore appeared immediately after the
+            // race was chosen, which is where the choice belongs. Races are the natural
+            // anchor: they are picked before classes, so the character has a favored class
+            // from the start, and a half-elf simply carries two selections instead of one.
+            //
+            // CharacterRaces is the game's own list of playable races, so races added by
+            // other mods are covered, while monster and pet races are not in it at all.
             var selection = BlueprintTool.Get<BlueprintFeatureSelection>(SelectionGuid);
             var selectionRef = selection.ToReference<BlueprintFeatureBaseReference>();
             int attached = 0;
-            foreach (var cls in BlueprintRoot.Instance.Progression.CharacterClasses)
+            foreach (var race in BlueprintRoot.Instance.Progression.CharacterRaces)
             {
-                if (cls == null || cls.PrestigeClass) continue;
-                if (ExcludedClasses.Contains(cls.AssetGuid.ToString())) continue;
-                var entry = cls.Progression?.LevelEntries?.FirstOrDefault(e => e.Level == 1);
-                if (entry == null) continue;
-                if (entry.m_Features.Any(r => r.Guid.ToString() == SelectionGuid)) continue;
-                entry.m_Features.Add(selectionRef);
+                if (race == null || race.HideInUI) continue;
+                if (race.m_Features.Any(r => r.Guid.ToString() == SelectionGuid)) continue;
+                race.m_Features = race.m_Features.Append(selectionRef).ToArray();
                 attached++;
+            }
+            if (attached == 0)
+            {
+                Main.Log("WARNING: favored class selection attached to NO race — check ProgressionRoot.CharacterRaces.");
+            }
+
+            // Half-elf "Multitalented": a second, independent favored class pick offering
+            // the same options as the first. It hangs off the RACE rather than a
+            // progression — races grant their features during chargen, which is exactly
+            // when the second choice is made, and it keeps the option away from every
+            // other race without needing a race prerequisite. Same approach as the
+            // original mod, which copies its favored class selection onto the half-elf.
+            //
+            // Picking the same class twice is impossible on its own: a progression stops
+            // qualifying once its rank reaches Ranks (1), so the class taken in the first
+            // slot is simply not offered in the second.
+            FeatureSelectionConfigurator.New("ZFCWMultitalented", MultitalentedGuid)
+                .SetDisplayName(LocalizationTool.CreateString("ZFCW.Multitalented.Name", "Multitalented", tagEncyclopediaEntries: false))
+                .SetDescription(LocalizationTool.CreateString("ZFCW.Multitalented.Desc",
+                    "Half-elves choose two favored classes at 1st level and gain 1 additional hit point or skill point " +
+                    "whenever they take a level in either one of those classes.",
+                    tagEncyclopediaEntries: false))
+                .SetIsClassFeature(true)
+                .SetGroup(Kingmaker.Blueprints.Classes.FeatureGroup.Racial)
+                .AddToAllFeatures(progressionGuids.Select(g => (Blueprint<BlueprintFeatureReference>)g)
+                    .Append(NoneFeatureGuid).ToArray())
+                .Configure();
+            // Deliberately NOT in BonusSelectionGuids: that set drives the level-up patch
+            // that re-anchors a per-class BONUS card behind its favored class pick. This is
+            // a class pick itself, and adding it there would make the two compete for the
+            // same slot behind the first card.
+            AllModGuids.Add(MultitalentedGuid);
+            AllModBlueprintGuids.Add(BlueprintGuid.Parse(MultitalentedGuid));
+
+            var halfElf = ResourcesLibrary.TryGetBlueprint<BlueprintRace>(BlueprintGuid.Parse(HalfElfRaceGuid));
+            if (halfElf == null)
+            {
+                Main.Log("Half-elf race blueprint not found — Multitalented NOT attached.");
+            }
+            else if (!halfElf.m_Features.Any(r => r.Guid.ToString() == MultitalentedGuid))
+            {
+                halfElf.m_Features = halfElf.m_Features
+                    .Append(BlueprintTool.Get<BlueprintFeatureSelection>(MultitalentedGuid)
+                        .ToReference<BlueprintFeatureBaseReference>())
+                    .ToArray();
+                Main.Log("Multitalented attached to the half-elf race.");
             }
 
             foreach (var g in AllModGuids)
@@ -623,7 +757,7 @@ namespace WOTRFavoredClass
             // for old-save compatibility).
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b55")] = (4, BonusDisplayKind.Flat);
 
-            Main.Log($"Favored class system installed: {progressionGuids.Count} class progressions, selection attached to {attached} class L1 entries.");
+            Main.Log($"Favored class system installed: {progressionGuids.Count} class progressions, selection attached to {attached} playable races.");
         }
 
         private sealed class RacialBonusDef
