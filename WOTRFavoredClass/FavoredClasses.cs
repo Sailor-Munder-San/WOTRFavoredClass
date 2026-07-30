@@ -373,6 +373,10 @@ namespace WOTRFavoredClass
         private const string ProgressionSeed = "602ea6032c324258a183588f84522ea1";
         private const string BonusSelectionSeed = "f431abc7ab7b4771a58fff7ee2af8a01";
 
+        // Vanilla progression every character gets, with no class restriction — its level 1
+        // fires exactly once, during chargen. Holds the favored class selection.
+        private const string BasicFeatsProgressionGuid = "5b72dd2ca2cb73b49903806ee8986325";
+
 
         // Guids of all per-class bonus selections — used by the level-up queue patch
         // to glue each bonus card right behind its favored-class pick card.
@@ -616,8 +620,11 @@ namespace WOTRFavoredClass
                 // produced "null" labels. Fall back to the bare class name if this
                 // specific class's string genuinely isn't registered yet, rather than
                 // ever baking in an empty/null result.
+                // CurrentPack can still be null this early — the startup coroutine only waits
+                // for the localization pack after the blueprint load finishes — so resolve
+                // defensively and fall back to the class's own name.
                 var resolvedClassName = Kingmaker.Localization.LocalizationManager.CurrentPack
-                    .GetText(cls.LocalizedName.m_Key, reportUnknown: false);
+                    ?.GetText(cls.LocalizedName.m_Key, reportUnknown: false);
                 var progressionName = !string.IsNullOrEmpty(resolvedClassName)
                     ? LocalizationTool.CreateString($"ZFCW.FC.{clsGuid}", $"{resolvedClassName} Favored Class", tagEncyclopediaEntries: false)
                     : cls.LocalizedName;
@@ -669,36 +676,41 @@ namespace WOTRFavoredClass
                     .Append(NoneFeatureGuid).ToArray())
                 .Configure();
 
-            // Attach the selection to every playable RACE, not to a class and not to the
-            // basic feat progression.
+            // Attach the selection to the BASIC FEAT progression's level-1 entry — not to a
+            // class, and not to the races.
             //
             // Per class was wrong outright: a class's level 1 is reached again whenever the
             // character multiclasses, so the pick card came back at, say, Fighter 1 of a
             // level-8 wizard, with every option already spent and nothing selectable on it.
+            // This progression carries no class restriction, so its level tracks character
+            // level and the entry fires exactly once.
             //
-            // The basic feat progression fixed that — it has no class restriction, so its
-            // level tracks character level and the entry fires once — but it is processed
-            // late in chargen, so the pick landed far away from the race step. The half-elf's
-            // second pick hangs off the race and therefore appeared immediately after the
-            // race was chosen, which is where the choice belongs. Races are the natural
-            // anchor: they are picked before classes, so the character has a favored class
-            // from the start, and a half-elf simply carries two selections instead of one.
-            //
-            // CharacterRaces is the game's own list of playable races, so races added by
-            // other mods are covered, while monster and pet races are not in it at all.
+            // Where the card APPEARS in chargen is decided by the feature group, not by what
+            // holds the selection: CharGenFeatureSelectorPhaseVM.GetFeaturePriority maps
+            // FeatureGroup.Racial and the heritage groups to the RaceFeatures phase. The
+            // background selection is the proof — it sits in that same phase with its own
+            // group and is not a race feature either. So the group above is what puts this
+            // right after the racial heritage step; hanging it off the races was never needed
+            // for that, and cost two things:
+            //   - the race screen listed "Favored Class" as though it were a racial trait of
+            //     every race, before anything had been chosen;
+            //   - SelectRace.Apply handed the selection to every NPC of a playable race.
+            // A favored class is not a racial trait, so it should not read as one — it shows
+            // up on the character once it has actually been chosen.
             var selection = BlueprintTool.Get<BlueprintFeatureSelection>(SelectionGuid);
             var selectionRef = selection.ToReference<BlueprintFeatureBaseReference>();
             int attached = 0;
-            foreach (var race in BlueprintRoot.Instance.Progression.CharacterRaces)
+            var basicFeats = ResourcesLibrary.TryGetBlueprint<BlueprintProgression>(
+                BlueprintGuid.Parse(BasicFeatsProgressionGuid));
+            var basicFeatsL1 = basicFeats?.LevelEntries?.FirstOrDefault(e => e.Level == 1);
+            if (basicFeatsL1 == null)
             {
-                if (race == null || race.HideInUI) continue;
-                if (race.m_Features.Any(r => r.Guid.ToString() == SelectionGuid)) continue;
-                race.m_Features = race.m_Features.Append(selectionRef).ToArray();
-                attached++;
+                Main.Log("ERROR: BasicFeatsProgression level 1 entry not found — favored class selection NOT attached.");
             }
-            if (attached == 0)
+            else if (!basicFeatsL1.m_Features.Any(r => r.Guid.ToString() == SelectionGuid))
             {
-                Main.Log("WARNING: favored class selection attached to NO race — check ProgressionRoot.CharacterRaces.");
+                basicFeatsL1.m_Features.Add(selectionRef);
+                attached++;
             }
 
             // Half-elf "Multitalented": a second, independent favored class pick offering
@@ -757,7 +769,7 @@ namespace WOTRFavoredClass
             // for old-save compatibility).
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b55")] = (4, BonusDisplayKind.Flat);
 
-            Main.Log($"Favored class system installed: {progressionGuids.Count} class progressions, selection attached to {attached} playable races.");
+            Main.Log($"Favored class system installed: {progressionGuids.Count} class progressions, selection attached to {attached} basic-feat L1 entry (expected 1).");
         }
 
         private sealed class RacialBonusDef
@@ -1088,9 +1100,15 @@ namespace WOTRFavoredClass
             FeatureConfigurator.New("ZFCWCompanionDRFeature", CompanionDRPetGuid)
                 .SetDisplayName(LocalizationTool.CreateString("ZFCW.CompanionDRFeature.Name", "Companion Damage Reduction", tagEncyclopediaEntries: false))
                 .SetDescription(LocalizationTool.CreateString("ZFCW.CompanionDRFeature.Desc",
-                    "This animal companion has DR/magic granted by its master's favored class bonus (maximum DR 10/magic).", tagEncyclopediaEntries: false))
+                    "This animal companion has DR/cold iron granted by its master's favored class bonus (maximum DR 10/cold iron).", tagEncyclopediaEntries: false))
                 .SetIsClassFeature(true)
-                .AddDamageResistancePhysical(bypassedByMagic: true, value: ContextValues.Rank())
+                // Cold iron rather than the original's magic: by the point a companion has
+                // this, practically everything attacking it already bypasses DR/magic, so the
+                // bonus was worth nothing in play. Deliberate deviation, see BONUS-MATRIX.md.
+                .AddDamageResistancePhysical(
+                    bypassedByMaterial: true,
+                    material: Kingmaker.Enums.Damage.PhysicalDamageMaterial.ColdIron,
+                    value: ContextValues.Rank())
                 .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b66", useMaster: true, max: 19).WithOnePlusDiv2Progression())
                 .Configure();
             AllModGuids.Add(CompanionDRPetGuid);
@@ -1699,7 +1717,7 @@ namespace WOTRFavoredClass
                     Key = "CompanionDR", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b66",
                     Divisor = 1, Ranks = 19, SkipBonusDisplay = true, // real curve is 1, +1/2... not floor(rank/Divisor)
                     DisplayName = "Companion Damage Reduction",
-                    Description = "The character's animal companion gains DR 1/magic. Each additional time this bonus is selected, the DR increases by 1/2 (maximum DR 10/magic).",
+                    Description = "The character's animal companion gains DR 1/cold iron. Each additional time this bonus is selected, the DR increases by 1/2 (maximum DR 10/cold iron).",
                     Races = new[] { GnomeRaceGuid, FetchlingRaceGuid },
                     Classes = new[] { HunterClassGuid, RangerClassGuid },
                     Components = f => f.AddComponent<GrantFeatureToPetsWhileActive>(c =>

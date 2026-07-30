@@ -41,11 +41,19 @@ namespace WOTRFavoredClass
 
         internal static void Log(string msg) => ModEntry?.Logger.Log(msg);
 
-        // PrestigePlus (and other BlueprintCore-based mods) register their classes in a
-        // StartGameLoader.LoadPackTOC postfix, AFTER BlueprintsCache.Init. Our content
-        // creation must therefore anchor even later in the same method.
-        [HarmonyPatch(typeof(StartGameLoader), nameof(StartGameLoader.LoadPackTOC))]
-        static class StartGameLoader_LoadPackTOC_Patch
+        // Anchored on LoadAllJson, the LAST blueprint-loading step of startup, because every
+        // other content mod has finished by then. The startup coroutine runs
+        // LoadPackTOC() and only afterwards LoadAllJson(path), and mods split across both:
+        // PrestigePlus registers its classes in a LoadPackTOC postfix, while EbonsContentMod
+        // creates its playable races — and configures arcanist exploits and faith magic — in a
+        // LoadAllJson postfix. Anchoring on LoadPackTOC therefore ran before those races
+        // existed, so they silently got no favored class option, and the mirrored reward pools
+        // missed the content added alongside them.
+        //
+        // LoadAllJson can be called more than once (ClockworkScenarioIndex.Init also calls it),
+        // hence the guard flag.
+        [HarmonyPatch(typeof(StartGameLoader), nameof(StartGameLoader.LoadAllJson))]
+        static class StartGameLoader_LoadAllJson_Patch
         {
             static bool Initialized;
 
@@ -61,12 +69,15 @@ namespace WOTRFavoredClass
                     var classes = BlueprintRoot.Instance.Progression.CharacterClasses
                         .Where(c => c != null)
                         .ToList();
-                    Log($"LoadPackTOC (post-mods). Visible character classes: {classes.Count}");
+                    var races = BlueprintRoot.Instance.Progression.CharacterRaces
+                        .Where(r => r != null)
+                        .ToList();
+                    Log($"LoadAllJson (post-mods). Visible character classes: {classes.Count}, character races: {races.Count}");
                     FavoredClasses.Install();
                 }
                 catch (Exception e)
                 {
-                    Log($"ERROR in LoadPackTOC hook: {e}");
+                    Log($"ERROR in LoadAllJson hook: {e}");
                 }
             }
         }

@@ -12,7 +12,7 @@ Roleplaying Game rules.
 
 ## Status
 
-Current release: **v0.1.3**. Essentially all of the original mod's ~91 favored class bonuses
+Current release: **v0.1.4**. Essentially all of the original mod's ~91 favored class bonuses
 that have a counterpart in WOTR are ported — universal HP/skill bonuses, racial PnP bonuses,
 resource pool bonuses, "1/6 of a new talent" wrapper bonuses, concentration, combat maneuvers,
 energy resistance, spell/ability damage, favored-enemy bonuses, animal companion bonuses,

@@ -55,11 +55,60 @@ namespace WOTRFavoredClass
         }
     }
 
-    // Save-hygiene gate: never let ANY blueprint of this mod become a fact on a
-    // non-player unit. Classed NPCs auto-level through the same class progressions
-    // we attach the favored class selection to; without this gate their units carry
-    // our GUIDs into area save files (junk data + would break those saves if the
-    // mod is removed). Covers all current and future mod features.
+    // Save-hygiene gate for the path that actually grants progression and race features.
+    //
+    // LevelUpHelper.AddFeaturesFromProgression grants each feature with unit.AddFact(item),
+    // which does NOT go through FeatureCollection.AddFeature/AddFact — so the gate below on
+    // FeatureCollection never saw these at all. Every NPC of a playable race therefore picked
+    // up the favored class selection as a fact and carried our GUID into that area's save
+    // file: an audit of one save found 13 units in a single area holding it. Those saves would
+    // break on removing the mod, which is exactly what the save-hygiene rules exist to stop.
+    //
+    // The condition is deliberately one-sided. A unit only loses the selection when it can be
+    // positively identified as already spawned into the world and not on the player's side.
+    // Anything not classifiable keeps it, because a player character silently missing their
+    // favored class is a far worse failure than a stray fact on a bystander — and during
+    // chargen the player's unit is not in the world yet, so it is never caught here.
+    //
+    // Filtering replaces the list reference rather than mutating it: the caller passes
+    // levelEntry.Features for progressions, which is the blueprint's own list.
+    [HarmonyPatch(typeof(Kingmaker.UnitLogic.Class.LevelUp.Actions.LevelUpHelper),
+        nameof(Kingmaker.UnitLogic.Class.LevelUp.Actions.LevelUpHelper.AddFeaturesFromProgression))]
+    internal static class LevelUpHelper_AddFeaturesFromProgression_Patch
+    {
+        [HarmonyPrefix]
+        static void Prefix(UnitDescriptor unit, ref System.Collections.Generic.IList<BlueprintFeatureBase> features)
+        {
+            if (features == null || features.Count == 0) return;
+            var u = unit?.Unit;
+            if (u == null || !u.IsInGame || u.IsPlayerFaction) return;
+
+            bool anyOurs = false;
+            for (int i = 0; i < features.Count; i++)
+            {
+                if (IsOurSelection(features[i])) { anyOurs = true; break; }
+            }
+            if (!anyOurs) return;
+
+            var filtered = new System.Collections.Generic.List<BlueprintFeatureBase>(features.Count);
+            for (int i = 0; i < features.Count; i++)
+            {
+                if (!IsOurSelection(features[i])) filtered.Add(features[i]);
+            }
+            features = filtered;
+        }
+
+        static bool IsOurSelection(BlueprintFeatureBase feature)
+        {
+            if (feature == null) return false;
+            var guid = feature.AssetGuid.ToString();
+            return guid == FavoredClasses.SelectionGuid || guid == FavoredClasses.MultitalentedGuid;
+        }
+    }
+
+    // Second line of defence, for grants that DO route through FeatureCollection — including
+    // the pet-side features this mod hands out itself. It does not cover progression or race
+    // features; those go through the patch above.
     [HarmonyPatch(typeof(FeatureCollection))]
     internal static class FeatureCollection_PlayerFactionGate
     {

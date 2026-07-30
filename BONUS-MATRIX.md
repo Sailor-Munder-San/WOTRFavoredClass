@@ -113,9 +113,17 @@ artifact. Summary by wave:
     is it checked which patron it belongs to.
 
 - **Wave 9**: where the favored class pick itself lives, and half-elf Multitalented.
-  The pick is now attached to every playable **race** (`ProgressionRoot.CharacterRaces`,
-  skipping `HideInUI`), so it is made right after the race is chosen and a character has a
-  favored class from the start. A half-elf simply carries two selections instead of one.
+  The pick lives on `BasicFeatsProgression` (`5b72dd2c...`) level 1 — a progression every
+  character gets, with no class restriction, so the entry fires exactly once during chargen.
+  Its **position** in chargen comes from `FeatureGroup.Racial`, not from what holds it: the
+  card appears right after the racial heritage step regardless. A half-elf additionally carries
+  Multitalented, which does hang off the race, because that one genuinely is a racial trait.
+  - Hanging the generic pick off the races was tried and reverted. It placed the card
+    correctly, but the group alone already does that — the vanilla background selection proves
+    it, sitting in the same phase with its own group while not being a race feature. Being a
+    race feature cost two things: the race screen listed "Favored Class" as a trait of every
+    race before anything was chosen, and `SelectRace.Apply` handed the selection to every NPC
+    of a playable race. A favored class is not a racial trait and should not read as one.
   - Both selections carry `FeatureGroup.Racial`, which is what actually decides *where* in
     chargen they appear: `CharGenFeatureSelectorPhaseVM.GetFeaturePriority` maps `Racial` and
     the heritage groups to the `RaceFeatures` phase and everything else to `Features`, which
@@ -212,6 +220,12 @@ artifact. Summary by wave:
   a druid under, say, Beast Shape from a scroll will also get the bonus.
 - Acid Spell Damage (Sorcerer): the original lists only Dwarf, we have Dwarf + Oread — a
   deliberate addition beyond the original (the user's decision), not a gap.
+- Companion Damage Reduction grants **DR/cold iron**, where the original and the tabletop text
+  say DR/magic. By the level a companion has meaningful ranks of this, essentially everything
+  attacking it already bypasses DR/magic, so the bonus was worth nothing in play. Cold iron
+  keeps the same shape and numbers while actually mattering. Deliberate deviation (the user's
+  decision), not a gap. The blueprint and its GUID are unchanged — it is the same bonus with a
+  different bypass material, so existing saves keep working.
 - Discrepancies between the original's README and its own `Core.cs` (we follow the code; the
   README is inaccurate): necromancy CL — README says "drow", the code says `dhampir` (we use
   Dhampir); lay on hands and wild shape AC — the README does not mention Half-Elf, the
