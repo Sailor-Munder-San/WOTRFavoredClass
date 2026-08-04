@@ -12,23 +12,46 @@ Roleplaying Game rules.
 
 ## Status
 
-Current release: **v0.1.4**. Essentially all of the original mod's ~91 favored class bonuses
-that have a counterpart in WOTR are ported — universal HP/skill bonuses, racial PnP bonuses,
-resource pool bonuses, "1/6 of a new talent" wrapper bonuses, concentration, combat maneuvers,
-energy resistance, spell/ability damage, favored-enemy bonuses, animal companion bonuses,
-bonus known spells (12 classes), Lay on Hands, Wild Shape natural armor, Channel Energy /
-Fervor / Harm Undead, Eldritch Scion arcana, Arcane Reservoir regeneration and patron spell
-caster level.
+Current release: **v0.1.5** — 89 racial favored class bonuses across every class below, plus
+the universal +1 HP / +1/2 skill rank bonus everyone gets. The favored class is chosen at the
+race step of character creation, and half-elves get **Multitalented**: two favored classes,
+either of which pays out whenever they take a level in it.
 
-The favored class is chosen at the race step of character creation, and half-elves get the
-**Multitalented** racial trait — two favored classes, either of which pays out whenever they
-take a level in it.
+| Class | Racial favored class bonuses |
+|---|---|
+| **Alchemist** | Natural Armor (Dwarf); Bombs (Gnome, Hobgoblin); Fire Resistance (Goblin); Known Formula (Elf, Human, Halfling, Half-Elf, Half-Orc, Aasimar, Tiefling); Bomb Damage (Half-Orc, Tiefling) |
+| **Antipaladin** | Cruelty (Drow) |
+| **Arcanist** | Arcane Reservoir (Elf, Half-Elf); Arcanist Exploit (Halfling); Concentration (Half-Orc); Reservoir Regen (Gnome); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
+| **Barbarian** | Speed (Elf, Half-Elf); Rage Rounds (Dwarf, Half-Orc); Cold/Electricity Resistance (Fetchling) |
+| **Bard** | Bardic Performance (Half-Elf, Half-Orc, Gnome, Goblin); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
+| **Bloodrager** | Speed (Elf, Half-Elf); Bloodrage Rounds (Dwarf, Half-Orc, Human, Half-Elf, Aasimar, Tiefling); Concentration (Drow) |
+| **Cleric** | Negative Energy Spell Damage (Hobgoblin, Fetchling); Channel Energy (Half-Elf); Harm Undead (Aasimar) |
+| **Druid** | Companion DR (Gnome, Fetchling, Svirfneblin); Companion Saves (Halfling); Wild Shape Natural Armor (Elf, Half-Orc, Half-Elf); Companion HP (Goblin, Half-Orc); Acid/Cold/Electricity/Fire Resistance (Gnome) |
+| **Fighter** | Disarm (Drow) |
+| **Hunter** | Companion DR (Gnome, Fetchling, Svirfneblin); Companion Saves (Halfling); Companion HP (Goblin, Half-Orc) |
+| **Inquisitor** | Concentration (Hobgoblin); Judgment (Duergar); Teamwork Feat (Drow, Half-Elf, Halfling); Known Spell (Elf, Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
+| **Kineticist** | Wild Talent (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Earth Blast Damage (Dwarf); Elemental Blast Damage (Elf, Half-Elf) |
+| **Magus** | Arcane Pool (Human, Half-Elf, Half-Orc, Aasimar, Tiefling, Suli, Fetchling); Magus Arcana (Elf, Halfling, Half-Elf); Eldritch Scion Arcana (Elf, Halfling, Half-Elf); Fire Spell Damage (Half-Orc) |
+| **Monk** | Ki Pool (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Grapple/Trip (Hobgoblin); Speed (Elf, Half-Elf) |
+| **Oracle** | Negative Energy Spell Damage (Dhampir); Known Spell (Elf, Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Known Spell – Enchantment (Ganzi) |
+| **Paladin** | Concentration (Dwarf); Lay on Hands (Elf, Gnome, Halfling, Half-Elf); Lay on Hands Self-Healing (Tiefling); Acid/Cold/Electricity/Fire Resistance (Human) |
+| **Ranger** | Dodge vs Favored Enemies (Halfling); Favored Enemy Bonus (Hobgoblin); Acid/Cold/Fire/Electricity Resistance (Suli); Companion DR (Gnome, Fetchling, Svirfneblin); Companion Natural Armor (Oread) |
+| **Rogue** | Rogue Talent (Human, Half-Elf, Half-Orc, Aasimar, Tiefling, Changeling, Kitsune, Samsaran) |
+| **Shaman** | Hex (Gnome); Known Spell (Half-Elf, Human, Half-Orc, Aasimar, Tiefling); Known Spell – Enchantment (Kitsune) |
+| **Skald** | Raging Song (Half-Elf, Half-Orc); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Concentration (Gnome) |
+| **Slayer** | Talent (Human, Gnome, Half-Elf, Half-Orc, Aasimar, Tiefling); Dodge vs Studied Targets (Halfling, Fetchling) |
+| **Sorcerer** | Enchantment Spell DC (Kitsune); Acid Spell Damage (Dwarf, Oread); Fire Spell Damage (Half-Orc); Cold/Electricity Resistance (Fetchling); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Known Spell – Fire (Goblin); Good-descriptor Caster Level (Aasimar); Known Spell – Curse/Evil (Drow) |
+| **Swashbuckler** | Panache (Elf, Human, Half-Elf, Half-Orc, Tiefling, Aasimar, Kitsune); Charmed Life (Gnome, Halfling, Half-Elf) |
+| **Warpriest** | Combat Feat (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Channel Energy (Half-Elf); Blessings (Dwarf, Elf, Nagaji); Fervor (Drow) |
+| **Witch** | Hex (Gnome); Patron Spells Caster Level (Halfling); Known Spell (Human, Half-Orc, Half-Elf, Elf, Aasimar, Tiefling, Goblin) |
+| **Wizard** | Necromancy Caster Level (Dhampir); Known Spell, 8 Thassilonian school branches (Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
+| **Kitsune** (any favored class) | Magical Tail |
 
-What remains unported is what the game cannot express: classes that do not exist in WOTR or its
-mods (Psychic, Occultist, Investigator, Spiritualist, Summoner), the kineticist internal buffer
+What remains unported is what the game cannot express: classes absent from WOTR and its mods
+(Psychic, Occultist, Investigator, Spiritualist, Summoner), the kineticist internal buffer
 (burn was reworked), and a couple of archetype-specific spellbook variants. A few bonuses whose
 tabletop wording has no mechanical equivalent in the game were given the closest available
-substitute instead, which is called out explicitly where it applies.
+substitute instead, called out explicitly where it applies.
 
 See **[BONUS-MATRIX.md](BONUS-MATRIX.md)** for the full per-bonus breakdown, including exactly
 which races/GUIDs are used, which bonuses are deferred and why, and the known fidelity gaps
@@ -46,7 +69,8 @@ degrades gracefully without them (those specific bonus options simply won't be o
 
 - [TabletopTweaks-Core](https://github.com/Vek17/TabletopTweaks-Core) / TabletopTweaks-Base
 - [EbonsContentMod](https://www.nexusmods.com/pathfinderwrathoftherighteous) (adds Goblin,
-  Drow, Hobgoblin, Fetchling, Suli, Duergar, Ganzi as playable races)
+  Drow, Hobgoblin, Fetchling, Suli, Duergar, Ganzi, Svirfneblin, Samsaran, Changeling, Nagaji
+  as playable races)
 - [Swashbuckler](https://github.com/novumvita/SwashbucklerWOTR) (Panache / Charmed Life bonuses)
 - [MicroscopicContentExpansion](https://github.com/alterasc/MicroscopicContentExpansion) (Antipaladin cruelty bonus)
 

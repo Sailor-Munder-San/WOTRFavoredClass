@@ -88,6 +88,10 @@ namespace WOTRFavoredClass
         private const string SuliRaceGuid = "d5398269cc1442d7802469cbe7fdf151";
         private const string DuergarRaceGuid = "ac2584f867f24c8499b8c77572dd4a61";
         private const string GanziRaceGuid = "14be0c2967a842febd853380ad785ce5";
+        private const string SvirfneblinRaceGuid = "ee7b945a0cf04c9fa6cb2c29aff3f4a8";
+        private const string SamsaranRaceGuid = "69ad3e90baf7442c9df956170c7206f0";
+        private const string ChangelingRaceGuid = "bc9b8d879d104455895c98e31f8d8503";
+        private const string NagajiRaceGuid = "4e6e156b707f47c5993ac9262ca19a56";
 
         // Classes
         private const string BarbarianClassGuid = "f7d7eb166b3dd594fb330d085df41853";
@@ -361,6 +365,35 @@ namespace WOTRFavoredClass
         private const string ArcanePoolResourceGuid = "effc3e386331f864e9e06d19dc218b37";
         private const string ArcanistArcaneReservoirResourceGuid = "cac948cbbe79b55459459dd6a8fe44ce";
         private const string JudgmentResourceGuid = "394088e9e54ccd64698c7bd87534027f";
+        private const string BlessingResourceGuid = "d128a6332e4ea7c4a9862b9fdb358cca";
+
+        // Alchemist bombs. Discovery bombs are separate root abilities rather than children of
+        // the standard bomb, so each one has to be listed for the damage bonus to reach it.
+        private static readonly string[] BombAbilityGuids =
+        {
+            "5fa0111ac60ed194db82d3110a9d0352", // BombStandart
+            "fd101fbc4aacf5d48b76a65e3aa5db6d", // AcidBomb
+            "bd05918a568c41e49aed7b9526ba596b", // BlindingBomb
+            "f80896af0e10d7c4f9454cf1ce50ada4", // DispellingBomb
+            "2b76e3bd89b4fa0419853a69fec0785f", // ExplosiveBomb
+            "557898e059f5ff644848b0a4df087391", // ForceBomb
+            "addf00b42747e1b47917b852073ddcd9", // FrostBomb
+            "b94ee802dc1574b4fb71215a4a6f11dc", // HolyBomb
+            "9aef2eb14fba66d47bef9442311e346e", // ShockBomb
+            "526aa6319e9174e4ab2026e0f299b011", // TanglefootBomb
+        };
+
+        // Wave 10 additions.
+        private const string BombDmgEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bbf";
+        private const string CompanionHPPetGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc1";
+        private const string CompanionNaturalACPetGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc3";
+        private const string BlessingEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bce";
+        private const string GoodCLEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd0";
+        private const string DrowSorcererSpellListGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd4";
+        private const string KitsuneShamanSpellListGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd8";
+
+        private static readonly string[] SorcererDrowKnownSpellLevelGuids = { "a20ec3e437f14938ab28b24f8c6ce12b", "1718f32392914ecca7a43696191909cf", "4558051ef64d4379bfbba5428f686caf", "3f3eea73bf0b4d3fa95a5b42196d7e94", "87390c49a59040fb9f8d8d859bb81028", "e3b7b0bb93bf428493cdee76a76ff556", "07f4154139694c9783566f4e428d88e0", "18ffd105db444471b914e490cbe4ee35" };
+        private static readonly string[] ShamanKitsuneKnownSpellLevelGuids = { "8c572b34dfe846e1ad5617666a492c9f", "5207b87415b340508fa28cc040cb86af", "5a257a479b4e44a3b2bf69d2c935a863", "f5accb652916420eb607d8aba453bbb3", "38fada954d0141b8b4a15bb6db5d2eb2", "d78c7777c8024922a5c238529a73e186", "7148be42a7dd458d8106c279a4515bfa", "83259926f18545f581e53cd6ccacd682" };
         // Swashbuckler mod resources (from its own source; unresolvable refs are
         // simply never matched by IncreaseResourceAmountPerRank if the mod is absent).
         private const string PanacheResourceGuid = "ac63bfcfec3143dca5ce04617a3bc854";
@@ -1073,6 +1106,31 @@ namespace WOTRFavoredClass
                 },
                 new()
                 {
+                    Key = "BombDmgEffect", Guid = BombDmgEffectGuid, Ranks = 10,
+                    DisplayName = "Bomb Damage",
+                    Description = "+1 point of damage per rank to the alchemist's bombs.",
+                    Components = f => f.AddComponent<AbilityDamageBonusPerRank>(c =>
+                        c.m_Abilities = BombAbilityGuids.Select(g =>
+                            BlueprintTool.GetRef<BlueprintAbilityReference>(g)).ToArray()),
+                },
+                new()
+                {
+                    Key = "BlessingEffect", Guid = BlessingEffectGuid, Ranks = 7,
+                    DisplayName = "Bonus Blessings",
+                    Description = "+1 use per day of the warpriest's blessings per rank.",
+                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                        c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(BlessingResourceGuid)),
+                },
+                new()
+                {
+                    Key = "GoodCLEffect", Guid = GoodCLEffectGuid, Ranks = 5,
+                    DisplayName = "Good Spell Caster Level",
+                    Description = "+1 caster level per rank when casting spells with the good descriptor.",
+                    Components = f => f.AddComponent<IncreaseSpellDescriptorCasterLevelPerRank>(c =>
+                        c.Descriptors = Kingmaker.Blueprints.Classes.Spells.SpellDescriptor.Good),
+                },
+                new()
+                {
                     Key = "JudgmentEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b65", Ranks = 3,
                     DisplayName = "Bonus Judgment",
                     Description = "+1 use per day of judgment per rank.",
@@ -1125,6 +1183,26 @@ namespace WOTRFavoredClass
                 .Configure();
             AllModGuids.Add(CompanionSavesPetGuid);
 
+            FeatureConfigurator.New("ZFCWCompanionHPFeature", CompanionHPPetGuid)
+                .SetDisplayName(LocalizationTool.CreateString("ZFCW.CompanionHPFeature.Name", "Companion Hit Points", tagEncyclopediaEntries: false))
+                .SetDescription(LocalizationTool.CreateString("ZFCW.CompanionHPFeature.Desc",
+                    "This animal companion has bonus hit points granted by its master's favored class bonus.", tagEncyclopediaEntries: false))
+                .SetIsClassFeature(true)
+                .AddContextStatBonus(StatType.HitPoints, ContextValues.Rank())
+                .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc0", useMaster: true, max: 20))
+                .Configure();
+            AllModGuids.Add(CompanionHPPetGuid);
+
+            FeatureConfigurator.New("ZFCWCompanionNaturalACFeature", CompanionNaturalACPetGuid)
+                .SetDisplayName(LocalizationTool.CreateString("ZFCW.CompanionNaturalACFeature.Name", "Companion Natural Armor", tagEncyclopediaEntries: false))
+                .SetDescription(LocalizationTool.CreateString("ZFCW.CompanionNaturalACFeature.Desc",
+                    "This animal companion has a natural armor bonus granted by its master's favored class bonus.", tagEncyclopediaEntries: false))
+                .SetIsClassFeature(true)
+                .AddContextStatBonus(StatType.AC, ContextValues.Rank(), Kingmaker.Enums.ModifierDescriptor.NaturalArmor)
+                .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc2", useMaster: true, max: 20).WithDivStepProgression(4))
+                .Configure();
+            AllModGuids.Add(CompanionNaturalACPetGuid);
+
             // Wave 6 (bonus known spells): custom race-specific spell lists, built
             // once here from already-loaded native class lists before the defs below
             // reference them by guid.
@@ -1147,6 +1225,30 @@ namespace WOTRFavoredClass
                 BuildFilteredSpellList("ZFCWShamanKnownSpellList", ShamanKnownSpellListGuid, 8,
                     spell => !shamanOwnGuids.Contains(spell.AssetGuid.ToString()),
                     BlueprintTool.Get<BlueprintCharacterClass>(ClericClassGuid)?.Spellbook?.SpellList);
+            }
+
+            // Drow sorcerer: the tabletop wording is "curse, evil, or pain". WOTR's
+            // SpellDescriptor has Curse and Evil but no Pain, so the filter covers the two
+            // that exist — see BONUS-MATRIX.md.
+            BuildFilteredSpellList("ZFCWDrowSorcererSpellList", DrowSorcererSpellListGuid, 8,
+                spell => (spell.SpellDescriptor & (SpellDescriptor.Curse | SpellDescriptor.Evil)) != 0,
+                BlueprintTool.Get<BlueprintCharacterClass>(SorcererClassGuid)?.Spellbook?.SpellList);
+
+            // Kitsune shaman: enchantment spells from the wizard list that the shaman does not
+            // already have, mirroring the Ganzi oracle build below.
+            {
+                var shamanOwn = new HashSet<string>();
+                var shamanList = BlueprintTool.Get<BlueprintCharacterClass>(ShamanClassGuid)?.Spellbook?.SpellList;
+                if (shamanList?.SpellsByLevel != null)
+                {
+                    foreach (var lvl in shamanList.SpellsByLevel)
+                    foreach (var s in lvl.Spells)
+                        if (s != null) shamanOwn.Add(s.AssetGuid.ToString());
+                }
+                BuildFilteredSpellList("ZFCWKitsuneShamanSpellList", KitsuneShamanSpellListGuid, 8,
+                    spell => spell.School == SpellSchool.Enchantment
+                             && !shamanOwn.Contains(spell.AssetGuid.ToString()),
+                    BlueprintTool.Get<BlueprintCharacterClass>(WizardClassGuid)?.Spellbook?.SpellList);
             }
 
             // Wizard "bonus known spell" is one FCB entry whose reward selection
@@ -1350,7 +1452,8 @@ namespace WOTRFavoredClass
                     Divisor = 6, Ranks = 18, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Rogue Talent (+1/6)",
                     Description = "Gain 1/6 of a new rogue talent.",
-                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
+                    Races = new[] { HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, AasimarRaceGuid, TieflingRaceGuid,
+                        ChangelingRaceGuid, KitsuneRaceGuid, SamsaranRaceGuid },
                     Classes = new[] { RogueClassGuid },
                     ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2e",
                     RewardSelectionGuid = RogueTalentRewardGuid,
@@ -1691,7 +1794,8 @@ namespace WOTRFavoredClass
                     Divisor = 4, Ranks = 20,
                     DisplayName = "Bonus Panache (+1/4)", EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b61",
                     Description = "Add +1/4 point of panache to the swashbuckler's panache pool.",
-                    Races = new[] { ElfRaceGuid, HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, TieflingRaceGuid, AasimarRaceGuid },
+                    Races = new[] { ElfRaceGuid, HumanRaceGuid, HalfElfRaceGuid, HalfOrcRaceGuid, TieflingRaceGuid, AasimarRaceGuid,
+                        KitsuneRaceGuid },
                     Classes = new[] { SwashbucklerClassGuid },
                 },
                 new()
@@ -1718,8 +1822,8 @@ namespace WOTRFavoredClass
                     Divisor = 1, Ranks = 19, SkipBonusDisplay = true, // real curve is 1, +1/2... not floor(rank/Divisor)
                     DisplayName = "Companion Damage Reduction",
                     Description = "The character's animal companion gains DR 1/cold iron. Each additional time this bonus is selected, the DR increases by 1/2 (maximum DR 10/cold iron).",
-                    Races = new[] { GnomeRaceGuid, FetchlingRaceGuid },
-                    Classes = new[] { HunterClassGuid, RangerClassGuid },
+                    Races = new[] { GnomeRaceGuid, FetchlingRaceGuid, SvirfneblinRaceGuid },
+                    Classes = new[] { HunterClassGuid, RangerClassGuid, DruidClassGuid },
                     Components = f => f.AddComponent<GrantFeatureToPetsWhileActive>(c =>
                         c.m_Feature = BlueprintTool.GetRef<BlueprintUnitFactReference>(CompanionDRPetGuid)),
                 },
@@ -1989,6 +2093,188 @@ namespace WOTRFavoredClass
                     Description = "Add +1/2 point to the amount of damage dealt by the cleric's channel energy ability for the purpose of harming undead.",
                     Races = new[] { AasimarRaceGuid },
                     Classes = new[] { ClericClassGuid },
+                },
+                // Wave 10.
+                new()
+                {
+                    Key = "BombDmg", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bbe",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Bomb Damage (+1/2)", EffectGuid = BombDmgEffectGuid,
+                    Description = "Add +1/2 to the alchemist's bomb damage.",
+                    Races = new[] { HalfOrcRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { AlchemistClassGuid },
+                },
+                new()
+                {
+                    Key = "CompanionHP", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc0",
+                    Divisor = 1, Ranks = 20,
+                    DisplayName = "Companion Hit Points",
+                    Description = "Add +1 hit point to the character's animal companion.",
+                    Races = new[] { GoblinRaceGuid, HalfOrcRaceGuid },
+                    Classes = new[] { DruidClassGuid, HunterClassGuid },
+                    Components = f => f.AddComponent<GrantFeatureToPetsWhileActive>(c =>
+                        c.m_Feature = BlueprintTool.GetRef<BlueprintUnitFactReference>(CompanionHPPetGuid)),
+                },
+                new()
+                {
+                    Key = "CompanionNaturalAC", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc2",
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Companion Natural Armor (+1/4)",
+                    Description = "Add +1/4 to the natural armor bonus of the ranger's animal companion.",
+                    Races = new[] { OreadRaceGuid },
+                    Classes = new[] { RangerClassGuid },
+                    Components = f => f.AddComponent<GrantFeatureToPetsWhileActive>(c =>
+                        c.m_Feature = BlueprintTool.GetRef<BlueprintUnitFactReference>(CompanionNaturalACPetGuid)),
+                },
+                new()
+                {
+                    Key = "DruidAcidRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc4",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Acid Resistance",
+                    Description = "Add +1 to the druid's acid resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { DruidClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc4")),
+                },
+                new()
+                {
+                    Key = "DruidColdRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc5",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Cold Resistance",
+                    Description = "Add +1 to the druid's cold resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { DruidClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc5")),
+                },
+                new()
+                {
+                    Key = "DruidElecRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc6",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Electricity Resistance",
+                    Description = "Add +1 to the druid's electricity resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { DruidClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc6")),
+                },
+                new()
+                {
+                    Key = "DruidFireRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc7",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Fire Resistance",
+                    Description = "Add +1 to the druid's fire resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { DruidClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc7")),
+                },
+                new()
+                {
+                    Key = "PaladinAcidRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc8",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Acid Resistance",
+                    Description = "Add +1 to the paladin's acid resistance (maximum +10).",
+                    Races = new[] { HumanRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc8")),
+                },
+                new()
+                {
+                    Key = "PaladinColdRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc9",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Cold Resistance",
+                    Description = "Add +1 to the paladin's cold resistance (maximum +10).",
+                    Races = new[] { HumanRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc9")),
+                },
+                new()
+                {
+                    Key = "PaladinElecRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bca",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Electricity Resistance",
+                    Description = "Add +1 to the paladin's electricity resistance (maximum +10).",
+                    Races = new[] { HumanRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bca")),
+                },
+                new()
+                {
+                    Key = "PaladinFireRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bcb",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Fire Resistance",
+                    Description = "Add +1 to the paladin's fire resistance (maximum +10).",
+                    Races = new[] { HumanRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Rank())
+                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bcb")),
+                },
+                new()
+                {
+                    Key = "ConcSkald", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bcc",
+                    Divisor = 1, Ranks = 20,
+                    DisplayName = "Concentration Bonus",
+                    Description = "Add a +1 bonus on concentration checks when casting spells.",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { SkaldClassGuid },
+                    Components = f => f.AddComponent<ConcentrationBonusPerRank>(),
+                },
+                new()
+                {
+                    Key = "Blessing", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bcd",
+                    Divisor = 3, Ranks = 18,
+                    DisplayName = "Bonus Blessings (+1/3)", EffectGuid = BlessingEffectGuid,
+                    Description = "Add 1/3 to the number of times per day the warpriest can use blessings.",
+                    Races = new[] { DwarfRaceGuid, ElfRaceGuid, NagajiRaceGuid },
+                    Classes = new[] { WarpriestClassGuid },
+                },
+                new()
+                {
+                    Key = "GoodCL", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bcf",
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Good Spell Caster Level (+1/4)", EffectGuid = GoodCLEffectGuid,
+                    Description = "Add +1/4 to the sorcerer's caster level when casting spells with the good descriptor.",
+                    Races = new[] { AasimarRaceGuid },
+                    Classes = new[] { SorcererClassGuid },
+                },
+                new()
+                {
+                    Key = "SorcererDrowKnownSpell", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd1",
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell — Curse or Evil (+1/2)",
+                    Description = "Add 1/2 spell known from the sorcerer spell list. This spell must have the curse or evil descriptor, and be at least 1 level below the highest spell level the sorcerer can cast.",
+                    Races = new[] { DrowRaceGuid },
+                    Classes = new[] { SorcererClassGuid },
+                    ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd2",
+                    RewardSelectionGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd3",
+                    RewardFeatures = BuildKnownSpellRewardFeatures("SorcererDrowKnownSpell", SorcererDrowKnownSpellLevelGuids,
+                        SorcererClassGuid, 8, DrowSorcererSpellListGuid).ToArray(),
+                },
+                new()
+                {
+                    Key = "ShamanKitsuneKnownSpell", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd5",
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Known Spell — Enchantment (+1/2)",
+                    Description = "Add 1/2 enchantment spell known from the wizard spell list that is not on the shaman spell list. This spell must be at least 1 level below the highest spell level the shaman can cast.",
+                    Races = new[] { KitsuneRaceGuid },
+                    Classes = new[] { ShamanClassGuid },
+                    ProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd6",
+                    RewardSelectionGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd7",
+                    RewardFeatures = BuildKnownSpellRewardFeatures("ShamanKitsuneKnownSpell", ShamanKitsuneKnownSpellLevelGuids,
+                        ShamanClassGuid, 8, KitsuneShamanSpellListGuid).ToArray(),
                 },
                 new()
                 {

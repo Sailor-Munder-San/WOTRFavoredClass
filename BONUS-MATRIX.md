@@ -191,6 +191,28 @@ artifact. Summary by wave:
   picks the removal up. Verified by IL inspection that `UpdateInternalModifiers` has no caller
   other than `UpdateValue` for this type.
 
+- **Wave 10**: 16 new entries filling gaps against the tabletop favored class lists.
+  Bomb damage (Half-Orc, Tiefling alchemists); companion hit points (Goblin/Half-Orc druids and
+  hunters) and companion natural armour (Oread ranger); druid and paladin energy resistance, four
+  entries each, following the Suli ranger precedent; skald concentration (Gnome); warpriest
+  blessings (Dwarf, Elf, Nagaji); good-descriptor caster level (Aasimar sorcerer); and two more
+  filtered known-spell lists — Drow sorcerer and Kitsune shaman. Companion DR gained the Druid
+  class and the Svirfneblin race; rogue talent gained Changeling, Kitsune and Samsaran; panache
+  gained Kitsune. Four Ebon races are newly referenced: Svirfneblin, Samsaran, Changeling, Nagaji.
+  - One new component, `IncreaseSpellDescriptorCasterLevelPerRank`. The existing school-based
+    component cannot express it: a descriptor like Good is orthogonal to the school.
+  - **Descriptor gap.** WOTR's `SpellDescriptor` has `Curse`, `Evil` and `Good`, but **no**
+    `Chaotic`, `Pain`, `Shadow` or `Darkness`. The Drow sorcerer list is therefore curse-or-evil
+    rather than the tabletop "curse, evil, or pain", and three bonuses that depend on the missing
+    descriptors cannot be built at all — see the deferred table.
+  - Bomb damage lists ten bomb abilities explicitly. Discovery bombs are separate root abilities
+    rather than children of the standard bomb, so a bomb added by another mod would not be
+    covered — the same scoping as the kineticist blast lists.
+  - Companion hit points is one entry covering Druid+Hunter × Goblin+Half-Orc. The cross product
+    also grants Druid/Half-Orc and Hunter/Goblin, which the tabletop lists do not, because a
+    single pet-side feature can only read one master counter. Companion DR already worked this
+    way.
+
 ## Deferred (with reasons)
 
 | Bonus | Reason |
@@ -198,6 +220,10 @@ artifact. Summary by wave:
 | Kineticist internal buffer | The resource does not exist in WOTR (burn was reworked) |
 | Eldritch Scion eldritch pool (÷4) | The resource exists (`EldritchPoolResourse` `17b6158d...`) and would be trivial via `IncreaseResourceAmountPerRank` — but per the user's decision the scion gets only bonus arcana, not the pool |
 | Ravener Hunter / Winter Witch / Unlettered Arcanist — separate archetype variants of bonus known spell (own spellbook instead of the base one) | There is no point making separate FCB entries for the archetypes as such: Ravener Hunter is not present in vanilla WOTR (only in the ExpandedContent mod, unverified), Winter Witch is a prestige class (it does not change the base list), and Unlettered Arcanist is already excluded from the base Arcanist entry instead of getting a variant |
+| Arcanist chaotic-descriptor caster level (Gnome); Wizard shadow/darkness known spell (Fetchling) | WOTR's `SpellDescriptor` has no `Chaotic`, `Shadow` or `Darkness` value. There is nothing to filter on. |
+| Rogue sneak attack damage vs outsiders (Tiefling) | `OutsiderType` (`9054d398...`) makes the target check trivial, but our damage component adds to *all* damage against that target, not to sneak attack specifically. Implementing it faithfully needs a hook into the sneak attack damage itself. |
+| Wizard arcane school power uses (Drow, Elf, Gnome, Tiefling) | Each school has its own resource (`DivinationSchoolBaseResource`, `EnchantmentSchoolBaseResource`, …), so "select one school power" needs a per-school track like the Thassilonian wizard, not a single resource entry. |
+| Cleric/Druid domain power uses (6 races) | Same shape: the choice is among the domains the character already took, so it needs the wrapper pattern used by the favored enemy pick. |
 | Insinuator Greed | The archetype is absent from MCE |
 | Psychic/Occultist/Investigator/Spiritualist/Summoner — everything | The classes are absent from WOTR and the installed mods |
 

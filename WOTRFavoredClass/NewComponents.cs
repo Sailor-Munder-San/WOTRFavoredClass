@@ -63,6 +63,31 @@ namespace WOTRFavoredClass
         public void OnEventDidTrigger(RuleCalculateAbilityParams evt) { }
     }
 
+    // +1 caster level per rank for spells carrying a given descriptor. The school-based
+    // component above cannot express this: a descriptor such as Good is orthogonal to the
+    // school. Reads the descriptor off the cast context, which is where the engine keeps it.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a15")]
+    public class IncreaseSpellDescriptorCasterLevelPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RuleCalculateAbilityParams>, IRulebookHandler<RuleCalculateAbilityParams>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        public SpellDescriptorWrapper Descriptors;
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(RuleCalculateAbilityParams evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var spell = evt.Spell;
+            if (spell == null || !spell.IsSpell) return;
+            if (!spell.SpellDescriptor.HasAnyFlag(Descriptors)) return;
+            evt.AddBonusCasterLevel(bonus, ModifierDescriptor.UntypedStackable);
+        }
+
+        public void OnEventDidTrigger(RuleCalculateAbilityParams evt) { }
+    }
+
     // Rank-scaled variant of vanilla IncreaseSpellSchoolDC: +1 DC per rank of the
     // carrier feature for spells of the given school.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
