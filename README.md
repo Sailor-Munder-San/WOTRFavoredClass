@@ -10,17 +10,12 @@ unlock an alternate racial favored class bonus (extra rage rounds, elemental res
 bonus talents, combat maneuver bonuses, and more), exactly as written in the Pathfinder
 Roleplaying Game rules.
 
-## Status
+## Bonuses
 
-Current release: **v0.1.6** — 89 racial favored class bonuses across every class below, plus
-the universal +1 HP / +1/2 skill rank bonus everyone gets. The favored class is chosen at the
-race step of character creation, and half-elves get **Multitalented**: two favored classes,
-either of which pays out whenever they take a level in it.
-
-> **v0.1.6 fixes energy resistance**, which granted rank *squared* instead of rank — a fourth
-> pick gave 16 points rather than 4. Existing saves need no migration; the value corrects itself
-> on load. The four per-energy options are now grouped behind a single **Energy Resistance** card
-> for the classes that get all four.
+89 racial favored class bonuses, plus the universal +1 hit point / +1/2 skill rank every
+character can take instead. The favored class is chosen at the race step of character creation,
+and half-elves get **Multitalented**: two favored classes, either of which pays out whenever they
+take a level in it.
 
 | Class | Racial favored class bonuses |
 |---|---|
@@ -52,15 +47,9 @@ either of which pays out whenever they take a level in it.
 | **Wizard** | Necromancy Caster Level (Dhampir); Known Spell, 8 Thassilonian school branches (Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
 | **Kitsune** (any favored class) | Magical Tail |
 
-What remains unported is what the game cannot express: classes absent from WOTR and its mods
-(Psychic, Occultist, Investigator, Spiritualist, Summoner), the kineticist internal buffer
-(burn was reworked), and a couple of archetype-specific spellbook variants. A few bonuses whose
-tabletop wording has no mechanical equivalent in the game were given the closest available
-substitute instead, called out explicitly where it applies.
-
-See **[BONUS-MATRIX.md](BONUS-MATRIX.md)** for the full per-bonus breakdown, including exactly
-which races/GUIDs are used, which bonuses are deferred and why, and the known fidelity gaps
-where this port knowingly differs from the tabletop rules or from the original mod.
+See **[BONUS-MATRIX.md](BONUS-MATRIX.md)** for the full per-bonus breakdown: which races and
+GUIDs each bonus uses, which bonuses are deferred and why, and the known fidelity gaps where this
+port knowingly differs from the tabletop rules or from the original mod.
 
 ## Installation
 
