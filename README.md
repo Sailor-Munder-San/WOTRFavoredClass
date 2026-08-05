@@ -12,10 +12,15 @@ Roleplaying Game rules.
 
 ## Status
 
-Current release: **v0.1.5** — 89 racial favored class bonuses across every class below, plus
+Current release: **v0.1.6** — 89 racial favored class bonuses across every class below, plus
 the universal +1 HP / +1/2 skill rank bonus everyone gets. The favored class is chosen at the
 race step of character creation, and half-elves get **Multitalented**: two favored classes,
 either of which pays out whenever they take a level in it.
+
+> **v0.1.6 fixes energy resistance**, which granted rank *squared* instead of rank — a fourth
+> pick gave 16 points rather than 4. Existing saves need no migration; the value corrects itself
+> on load. The four per-energy options are now grouped behind a single **Energy Resistance** card
+> for the classes that get all four.
 
 | Class | Racial favored class bonuses |
 |---|---|

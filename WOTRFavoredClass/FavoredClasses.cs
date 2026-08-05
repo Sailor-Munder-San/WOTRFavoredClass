@@ -824,6 +824,33 @@ namespace WOTRFavoredClass
             public string RequireArchetype;    // show the entry ONLY for this archetype
             public BonusDisplayKind DisplayKind = BonusDisplayKind.Flat; // tooltip wording for the earned bonus
             public bool SkipBonusDisplay;      // opt out when the real progression isn't floor(rank/Divisor)
+            public string Folder;              // Key of the BonusFolderDef this nests inside (null = listed directly)
+        }
+
+        // A container card: instead of N sibling entries in the bonus list, one entry that
+        // unfolds into them, the same native nesting wrapper mode already relies on.
+        //
+        // Worth doing ONLY where a single character actually faces a choice among the
+        // children — otherwise the folder is one extra click to reach the sole available
+        // option. Energy resistance is the only family that qualifies: a Suli ranger, a
+        // Gnome druid and a Human paladin each choose among four energies, and a Fetchling
+        // barbarian or sorcerer between two. Every other multi-entry family was checked and
+        // does not qualify — bonus known spells, companion bonuses and Lay on Hands have
+        // disjoint race sets per class (no character is offered two), and the magus arcana
+        // pair is mutually exclusive by archetype.
+        //
+        // Children keep their own GUIDs, ranks and components untouched; only their place in
+        // the list changes. That keeps existing saves valid — the facts a character already
+        // holds are the same blueprints as before.
+        private sealed class BonusFolderDef
+        {
+            public string Key;
+            public string FolderGuid;
+            public string DisplayName;
+            public string Description;
+            public int Ranks = 20;             // one pick per class level, so 20 is the ceiling
+            public string[] Races;
+            public string[] Classes;
         }
 
         private sealed class EffectDef
@@ -1272,6 +1299,42 @@ namespace WOTRFavoredClass
                     extraPrereq: c => c.AddPrerequisiteFeature(track.ArchetypeFeatureGuid)));
             }
 
+            var folders = new List<BonusFolderDef>
+            {
+                new()
+                {
+                    Key = "FetchlingEnergyRes", FolderGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd9",
+                    DisplayName = "Energy Resistance",
+                    Description = "Add +1 to the character's cold or electricity resistance (maximum +10 each).",
+                    Races = new[] { FetchlingRaceGuid },
+                    Classes = new[] { BarbarianClassGuid, SorcererClassGuid },
+                },
+                new()
+                {
+                    Key = "SuliEnergyRes", FolderGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bda",
+                    DisplayName = "Energy Resistance",
+                    Description = "Add +1 to one of the ranger's energy resistances — acid, cold, electricity or fire (maximum +10 each).",
+                    Races = new[] { SuliRaceGuid },
+                    Classes = new[] { RangerClassGuid },
+                },
+                new()
+                {
+                    Key = "DruidEnergyRes", FolderGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bdb",
+                    DisplayName = "Energy Resistance",
+                    Description = "Add +1 to one of the druid's energy resistances — acid, cold, electricity or fire (maximum +10 each).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { DruidClassGuid },
+                },
+                new()
+                {
+                    Key = "PaladinEnergyRes", FolderGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bdc",
+                    DisplayName = "Energy Resistance",
+                    Description = "Add +1 to one of the paladin's energy resistances — acid, cold, electricity or fire (maximum +10 each).",
+                    Races = new[] { HumanRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                },
+            };
+
             var defs = new List<RacialBonusDef>
             {
                 new()
@@ -1703,9 +1766,15 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the alchemist's fire resistance (maximum +10).",
                     Races = new[] { GoblinRaceGuid },
                     Classes = new[] { AlchemistClassGuid },
+                    // Value is a flat 1, NOT ContextValues.Rank(). This component scales itself:
+                    // AddDamageResistanceEnergy.CalculateValue is `Fact.GetRank() * Value`, unlike
+                    // AddDamageResistancePhysical, AddContextStatBonus and AddCMBBonusForManeuver,
+                    // which all take the value as-is and so do need an explicit rank. Passing the
+                    // rank here made every energy resistance rank SQUARED — correct at 1 pick,
+                    // which is why it survived from Wave 5 to v0.1.5 unnoticed; 4 picks read 16.
+                    // Every entry below follows this same shape.
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b57")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -1715,9 +1784,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the character's cold resistance (maximum +10).",
                     Races = new[] { FetchlingRaceGuid },
                     Classes = new[] { BarbarianClassGuid, SorcererClassGuid },
+                    Folder = "FetchlingEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b58")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -1727,9 +1796,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the character's electricity resistance (maximum +10).",
                     Races = new[] { FetchlingRaceGuid },
                     Classes = new[] { BarbarianClassGuid, SorcererClassGuid },
+                    Folder = "FetchlingEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b59")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -1739,9 +1808,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the ranger's acid resistance (maximum +10).",
                     Races = new[] { SuliRaceGuid },
                     Classes = new[] { RangerClassGuid },
+                    Folder = "SuliEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5a")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -1751,9 +1820,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the ranger's cold resistance (maximum +10).",
                     Races = new[] { SuliRaceGuid },
                     Classes = new[] { RangerClassGuid },
+                    Folder = "SuliEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5b")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -1763,9 +1832,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the ranger's fire resistance (maximum +10).",
                     Races = new[] { SuliRaceGuid },
                     Classes = new[] { RangerClassGuid },
+                    Folder = "SuliEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5c")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -1775,9 +1844,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the ranger's electricity resistance (maximum +10).",
                     Races = new[] { SuliRaceGuid },
                     Classes = new[] { RangerClassGuid },
+                    Folder = "SuliEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b5d")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2134,9 +2203,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the druid's acid resistance (maximum +10).",
                     Races = new[] { GnomeRaceGuid },
                     Classes = new[] { DruidClassGuid },
+                    Folder = "DruidEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc4")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2146,9 +2215,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the druid's cold resistance (maximum +10).",
                     Races = new[] { GnomeRaceGuid },
                     Classes = new[] { DruidClassGuid },
+                    Folder = "DruidEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc5")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2158,9 +2227,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the druid's electricity resistance (maximum +10).",
                     Races = new[] { GnomeRaceGuid },
                     Classes = new[] { DruidClassGuid },
+                    Folder = "DruidEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc6")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2170,9 +2239,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the druid's fire resistance (maximum +10).",
                     Races = new[] { GnomeRaceGuid },
                     Classes = new[] { DruidClassGuid },
+                    Folder = "DruidEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc7")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2182,9 +2251,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the paladin's acid resistance (maximum +10).",
                     Races = new[] { HumanRaceGuid },
                     Classes = new[] { PaladinClassGuid },
+                    Folder = "PaladinEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc8")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2194,9 +2263,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the paladin's cold resistance (maximum +10).",
                     Races = new[] { HumanRaceGuid },
                     Classes = new[] { PaladinClassGuid },
+                    Folder = "PaladinEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc9")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2206,9 +2275,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the paladin's electricity resistance (maximum +10).",
                     Races = new[] { HumanRaceGuid },
                     Classes = new[] { PaladinClassGuid },
+                    Folder = "PaladinEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bca")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2218,9 +2287,9 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the paladin's fire resistance (maximum +10).",
                     Races = new[] { HumanRaceGuid },
                     Classes = new[] { PaladinClassGuid },
+                    Folder = "PaladinEnergyRes",
                     Components = f => f
-                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Rank())
-                        .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bcb")),
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Constant(1)),
                 },
                 new()
                 {
@@ -2289,6 +2358,7 @@ namespace WOTRFavoredClass
 
             var extras = new Dictionary<string, List<string>>();
             var globalExtras = new List<string>();
+            var folderChildren = new Dictionary<string, List<string>>();
             foreach (var def in defs)
             {
                 var races = def.Races.Select(g => BlueprintTool.GetRef<BlueprintRaceReference>(g)).ToArray();
@@ -2427,6 +2497,32 @@ namespace WOTRFavoredClass
                     RewardPickCounters[BlueprintGuid.Parse(def.RewardSelectionGuid)] = def.ProgressGuid;
                 }
 
+                // A foldered entry is not listed in the bonus selection itself — its folder is,
+                // and the entry becomes one of the folder's children. The folder claims the
+                // slot of its FIRST child so the bonus list keeps the order declared here.
+                if (def.Folder != null)
+                {
+                    if (!folderChildren.TryGetValue(def.Folder, out var kids))
+                    {
+                        folderChildren[def.Folder] = kids = new List<string>();
+                    }
+                    kids.Add(def.FeatureGuid);
+                    if (kids.Count > 1) continue;   // the slot is already taken by the first child
+
+                    var folder = folders.FirstOrDefault(f => f.Key == def.Folder);
+                    if (folder == null)
+                    {
+                        Main.Log($"ERROR: entry '{def.Key}' names folder '{def.Folder}', which does not exist.");
+                        continue;
+                    }
+                    foreach (var cls in folder.Classes)
+                    {
+                        if (!extras.TryGetValue(cls, out var l)) extras[cls] = l = new List<string>();
+                        l.Add(folder.FolderGuid);
+                    }
+                    continue;
+                }
+
                 if (def.Classes == null)
                 {
                     globalExtras.Add(def.FeatureGuid);
@@ -2439,6 +2535,28 @@ namespace WOTRFavoredClass
                         list.Add(def.FeatureGuid);
                     }
                 }
+            }
+
+            // Built after the loop, so every child blueprint already exists. The folder carries
+            // no mechanics of its own and stays out of BonusDisplays: each child keeps its own
+            // rank, components and tooltip readout exactly as it had them when listed directly.
+            foreach (var folder in folders)
+            {
+                if (!folderChildren.TryGetValue(folder.Key, out var children) || children.Count == 0)
+                {
+                    Main.Log($"Bonus folder '{folder.Key}' has no entries — not created.");
+                    continue;
+                }
+                FeatureSelectionConfigurator.New($"ZFCW{folder.Key}Folder", folder.FolderGuid)
+                    .SetDisplayName(LocalizationTool.CreateString($"ZFCW.{folder.Key}.Name", folder.DisplayName, tagEncyclopediaEntries: false))
+                    .SetDescription(LocalizationTool.CreateString($"ZFCW.{folder.Key}.Desc", folder.Description, tagEncyclopediaEntries: false))
+                    .SetRanks(folder.Ranks)
+                    .SetIsClassFeature(true)
+                    .AddComponent<PrerequisiteRaceAny>(c => c.m_Races =
+                        folder.Races.Select(g => BlueprintTool.GetRef<BlueprintRaceReference>(g)).ToArray())
+                    .AddToAllFeatures(children.Select(g => (Blueprint<BlueprintFeatureReference>)g).ToArray())
+                    .Configure();
+                AllModGuids.Add(folder.FolderGuid);
             }
 
             // Retired blueprints from the two-entry (partial/full) design: kept

@@ -213,6 +213,46 @@ artifact. Summary by wave:
     single pet-side feature can only read one master counter. Companion DR already worked this
     way.
 
+- **Energy resistance was rank SQUARED, from Wave 5 until v0.1.5 — fixed.** The native
+  `AddDamageResistanceEnergy` multiplies its `Value` by the fact's rank on its own
+  (`CalculateValue` is `Fact.GetRank() * Value`), and all 15 entries were also passing
+  `ContextValues.Rank()` as that value. Resistance therefore came out as rank², so a fourth pick
+  read **16** instead of 4. One pick gives `1 * 1 == 1`, which is why it survived every release
+  and a full playbook run unnoticed. Each entry now passes a flat `ContextValues.Constant(1)`,
+  and the redundant `ContextRankConfig` is gone.
+  - The behaviour is **not** shared across the family, so it cannot be assumed either way:
+    `AddDamageResistancePhysical` (companion DR), `AddContextStatBonus` and
+    `AddCMBBonusForManeuver` all take the value as-is and do need the explicit rank. All three
+    were checked against the assembly and are correct.
+  - Saves need no migration: only the computed value changes, the fact and its rank are
+    untouched, so an existing character's resistance simply drops to the correct number on load.
+  - `AUDIT-PLAYBOOK.md` C4 is a new automated check for this bug class — it decompiles every
+    native component we hand `ContextValues.Rank()` and fails if it finds an `EntityFact.GetRank`
+    call inside.
+
+- **Energy resistance folded into one card per class.** The four acid/cold/electricity/fire
+  entries used to sit in the bonus list as four sibling cards, which is most of what a Suli
+  ranger, Gnome druid or Human paladin saw when opening it. They are now children of a single
+  "Energy Resistance" selection that unfolds on pick — the same native nesting wrapper mode
+  already uses. Four folders: Fetchling (barbarian, sorcerer — two energies), Suli (ranger),
+  Gnome (druid), Human (paladin). Card counts drop accordingly: paladin 7→4, druid 8→5,
+  ranger 8→5, barbarian 4→3.
+  - Children keep their GUIDs, ranks, components and tooltips untouched; only their position
+    changes, so saves holding those facts stay valid. Each folder is a new blueprint
+    (`…bd9`–`…bdc`) and carries no mechanics of its own — the resistance value still comes from
+    the child's own rank, and the folder stays out of `BonusDisplays`.
+  - The folder claims the list slot of its first child, so the order the defs table declares is
+    preserved rather than the folders being appended at the end.
+  - **Goblin alchemist fire resistance is deliberately NOT foldered**: it is the only energy
+    option that race/class pair has, so a folder would be one extra click to reach a single
+    choice. The rule applied is "fold only where one character actually faces a choice among
+    the children".
+  - Every other multi-entry family was checked against that rule and does not qualify. Bonus
+    known spells, companion bonuses (DR / saves / hit points / natural armour) and Lay on Hands
+    each have **disjoint race sets** within a class, so no character is ever offered two at
+    once; the magus arcana pair is mutually exclusive by archetype. Energy resistance is the
+    only family where folding removes clicks instead of adding one.
+
 ## Deferred (with reasons)
 
 | Bonus | Reason |
