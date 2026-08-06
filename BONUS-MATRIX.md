@@ -326,6 +326,17 @@ artifact. Summary by wave:
     the existing `IncreaseResourceAmountPerRank` as uses instead of minutes. Same pool and same
     effect in play; only the unit differs, and it is the game's unit rather than the book's.
 
+- **Dual heritage moved out of the data and into the gate.** A half-race reaches its own bonuses
+  and both parents' — Half-Orc gets Half-Orc/Human/**Orc**, Half-Elf gets Half-Elf/Human/**Elf**.
+  That was previously applied by hand, by listing the halves beside Human in each entry's `Races`
+  array, and an audit found **11 of 108 entries had missed one or both**: every paladin energy
+  resistance, the warpriest Blessing, the cavalier banner and mount-hit-point entries, the shifter
+  speed and minor form entries, and the whole Orc line — so a half-orc could not reach the orc
+  shifter's claw bonus at all. The rule now lives in `RaceHeritage.Qualifies` behind
+  `PrerequisiteRaceAny`, so entry data names the race the tabletop names and no entry can omit it.
+  Existing explicit listings are left alone: several are genuine tabletop entries for the half
+  race rather than heritage shorthand, and a redundant listing costs nothing. Guarded by check C5.
+
 ## Deferred (with reasons)
 
 | Bonus | Reason |

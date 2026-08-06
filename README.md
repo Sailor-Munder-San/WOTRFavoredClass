@@ -49,6 +49,10 @@ take a level in it.
 | **Wizard** | Necromancy Caster Level (Dhampir); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
 | **Kitsune** (any favored class) | Magical Tail |
 
+Half-races reach more than the table shows: a **half-orc** may take any bonus listed for Half-Orc,
+Human **or Orc**, and a **half-elf** any listed for Half-Elf, Human **or Elf** — the Pathfinder
+rule that they count as both parent races.
+
 See **[BONUS-MATRIX.md](BONUS-MATRIX.md)** for the full per-bonus breakdown: which races and
 GUIDs each bonus uses, which bonuses are deferred and why, and the known fidelity gaps where this
 port knowingly differs from the tabletop rules or from the original mod.

@@ -327,6 +327,39 @@ namespace WOTRFavoredClass
         }
     }
 
+    // A half-race qualifies for its OWN bonuses and for those of BOTH parent races:
+    //   Half-Orc → Half-Orc, Human, Orc
+    //   Half-Elf → Half-Elf, Human, Elf
+    //
+    // The rule lives here rather than in the entry data on purpose. It used to be applied by
+    // hand, by listing Half-Elf and Half-Orc alongside Human in each entry's Races array, and
+    // that silently failed: an audit found 11 of 108 entries had missed one or both, including
+    // every paladin energy resistance and the whole Orc line — a half-orc could not reach the
+    // orc shifter's claw bonus at all. Encoding it once, where the check happens, means no entry
+    // can forget it again and the data can name the race the tabletop names.
+    //
+    // Guid comparison, not blueprint identity: this runs for every option on every refresh of
+    // the level-up screen.
+    internal static class RaceHeritage
+    {
+        private static readonly BlueprintGuid HalfElf = BlueprintGuid.Parse("b3646842ffbd01643ab4dac7479b20b0");
+        private static readonly BlueprintGuid HalfOrc = BlueprintGuid.Parse("1dc20e195581a804890ddc74218bfd8e");
+        private static readonly BlueprintGuid Human = BlueprintGuid.Parse("0a5d473ead98b0646b94495af250fdc4");
+        private static readonly BlueprintGuid Elf = BlueprintGuid.Parse("25a5878d125338244896ebd3238226c8");
+        private static readonly BlueprintGuid Orc = BlueprintGuid.Parse("7088a348ef0646dabdb3900fb187fb21");
+
+        internal static bool Qualifies(BlueprintGuid actualRace, BlueprintGuid listedRace)
+        {
+            if (actualRace == listedRace) return true;
+            if (actualRace == HalfElf) return listedRace == Human || listedRace == Elf;
+            if (actualRace == HalfOrc) return listedRace == Human || listedRace == Orc;
+            return false;
+        }
+
+        // True for a race that reaches bonuses beyond its own, so the tooltip can say so.
+        internal static bool IsDualHeritage(BlueprintGuid race) => race == HalfElf || race == HalfOrc;
+    }
+
     // Race gate for racial favored class bonuses (WOTR has no vanilla race prerequisite).
     // Stateless per the save-hygiene invariants.
     [AllowedOn(typeof(BlueprintFeature), false)]
@@ -339,18 +372,26 @@ namespace WOTRFavoredClass
         {
             var race = unit.Progression.Race;
             if (race == null) return false;
+            var actual = race.AssetGuid;
             // Plain loop, no closure: the level-up screen re-evaluates every option's
             // prerequisites on each refresh, and this gate sits on most of our entries.
             for (int i = 0; i < m_Races.Length; i++)
             {
-                if (m_Races[i].Get() == race) return true;
+                if (RaceHeritage.Qualifies(actual, m_Races[i].Guid)) return true;
             }
             return false;
         }
 
         public override string GetUITextInternal(UnitDescriptor unit)
         {
-            return "Race: " + string.Join(" or ", m_Races.Select(r => r.Get()?.Name ?? "?"));
+            var text = "Race: " + string.Join(" or ", m_Races.Select(r => r.Get()?.Name ?? "?"));
+            // Otherwise a half-orc offered an orc bonus reads "Race: Orc" and looks like a bug.
+            var race = unit?.Progression?.Race;
+            if (race != null && RaceHeritage.IsDualHeritage(race.AssetGuid))
+            {
+                text += $" (a {race.Name} counts as both parent races)";
+            }
+            return text;
         }
     }
 
