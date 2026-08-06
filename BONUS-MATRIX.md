@@ -253,6 +253,79 @@ artifact. Summary by wave:
     once; the magus arcana pair is mutually exclusive by archetype. Energy resistance is the
     only family where folding removes clicks instead of adding one.
 
+- **Wave 11: cavalier and shifter.** Both are vanilla WOTR classes (`3adc3439…`, `a406d6eb…`)
+  that already had a favored class progression but not a single racial bonus, so the only options
+  were the universal hit point and skill rank. Ten new entries cover 7 of their 11 tabletop lines;
+  the classes with bonuses go from 26 to 28.
+  - **Cavalier**: challenge damage (Aasimar ÷4, Dwarf ÷2), mount hit points (Elf, Goblin,
+    Half-Orc) and mount speed (Gnome, Half-Elf, Nagaji, ÷5).
+  - **Shifter**: base speed (Elf, ÷5), defensive instinct dodge vs Large or larger (Halfling ÷4),
+    and energy resistance (Gnome) as four entries behind one folder card — the tabletop wording
+    here *is* "acid, cold, electricity, or fire … then select a new type", so the folder matches
+    the rule rather than merely tidying the list.
+  - Two new components. `DamageBonusAgainstCasterBuffTargetPerRank` keys off
+    `CavalierChallengeBuffTarget` (`4f021832…`), which the vanilla challenge puts on the foe with
+    the cavalier as its caster; requiring that caster to be the owner stops two cavaliers feeding
+    off each other's challenge, the same guard `ACBonusAgainstCasterBuffPerRank` already uses.
+    `ACBonusAgainstLargerCreaturesPerRank` reads `State.Size` rather than `OriginalSize`, so an
+    enlarged attacker counts.
+  - The mount reuses the companion plumbing unchanged — a mount is an animal companion, so it is
+    a pet and `GrantFeatureToPetsWhileActive` plus `MasterFeatureRank` apply as-is. Its counters
+    are separate blueprints from the druid/hunter ones so the two scale from their own picks.
+  - Mount speed is `floor(rank/5) × 5`, the same arithmetic as the character-side speed bonus:
+    five picks are worth +5 feet and four are worth nothing, exactly as written.
+  - **Orc** is newly referenced (`7088a348…`, EbonsContentMod) for the shifter claw entry.
+
+- **Wave 11b: all four deferred cavalier/shifter lines, resolved by research.** Every one had
+  been written off for the wrong reason — in each case the mechanism was assumed missing when it
+  was only unlocated. Cavalier and shifter are now complete at 6 and 5 entries.
+  - **Cavalier attack-of-opportunity damage (Halfling ÷2).** `RuleAttackWithWeapon` exposes
+    `IsAttackOfOpportunity` as a plain public property, so no hook was needed. And no class-level
+    substitution was needed either: the challenge's extra damage *is* the cavalier's class level,
+    so "+1/2 to effective class level for this purpose" is just more damage on that attack. It
+    became a flag on the component the Aasimar/Dwarf entries already use.
+  - **Shifter claw damage (Orc ÷5).** `WeaponCategory` has a dedicated `Claw` value, and
+    `RuleAttackWithWeapon.Weapon` is a public field whose `Blueprint.Category` names it — so the
+    new `WeaponCategoryDamageBonusPerRank` filters on the weapon actually being swung rather than
+    needing the seven `ShifterClawAbilityLevel*` activatables enumerated.
+    - Narrowed to the ability itself, so an animal form's claws do **not** benefit. The modal is
+      an activatable, and an activatable applies a buff — which lives in its `m_Buff` field, not
+      in its components, which is why the first dump of `ShifterClawAbilityLevel*` looked empty
+      and the approach was briefly written off. Keying on the seven `ShifterClawBuffLevel*` buffs
+      is what makes "when using the shifter claws ability" exact.
+    - Matching the weapon blueprint instead does **not** work: WOTR ships only one
+      shifter-specific claw weapon (`ShifterClaw1d10x3`) against seven claw modals, so the lower
+      tiers reuse the generic `Claw1dX` blueprints that animal forms also carry.
+    - Both halves of the test are required. Category alone is too broad (an animal form's claws
+      are claws); the buff alone is too broad the other way (the modal stays on while its owner
+      swings a sword). Category is tested first — a field read against a collection walk — and
+      most attacks in play are not claws, so the buff scan rarely runs.
+  - **Cavalier banner bonus (Human, Kitsune ÷4).** Implemented by raising the number the banner
+    already computes, instead of adding a bonus beside it — which is both what the tabletop line
+    says and the only thing that works, since both banner effects apply their modifier with
+    `ModifierDescriptor.Morale` and same-descriptor bonuses do not stack.
+    - One `ContextRankConfig` on `CavalierBannerBuff` governs the whole banner:
+      `SavingThrowBonusAgainstDescriptor` computes `Bonus.Calculate() + Value` and
+      `ChargeAttackBonus` uses `Bonus` alone, and both read that same Default rank. So a single
+      number drives saves-vs-fear and the charge attack together.
+    - The rank resolves against the **caster**, not the owner: `ContextRankConfig.GetBaseValue`
+      opens by taking `MechanicsContext.MaybeCaster`. The buff sits on the ally, but the caster
+      is the cavalier — which is what makes the cavalier's own counter reachable from a buff on
+      somebody else. (An earlier reading of this file claimed no such bridge existed, on the
+      strength of `ContextRankBaseValueType` having no caster-feature-rank member. That was
+      wrong: the bridge is the context, not the base value type.)
+    - `ContextRankConfig_GetValue_BannerPatch` therefore postfixes `GetValue`, and the counter
+      carries no component at all — it exists only to hold ranks. **Cost**: `GetValue` has exactly
+      one caller, `MechanicsContext.RecalculateRanks`, so ranks are computed when a context is
+      built or refreshed rather than per roll, and the guard is a reference comparison against
+      the config cached at install. The vanilla blueprint is read, never written.
+  - **Shifter minor form (Human ÷3).** The tabletop bonus is minutes per day, and WOTR does not
+    track the form in minutes — but it does meter the aspect as a per-day pool.
+    `ShifterAspectResource` (`1b096f34…`) reads base 3 plus one per class level, confirming the
+    minor form is resource-limited rather than an at-will toggle, so the bonus carries over onto
+    the existing `IncreaseResourceAmountPerRank` as uses instead of minutes. Same pool and same
+    effect in play; only the unit differs, and it is the game's unit rather than the book's.
+
 ## Deferred (with reasons)
 
 | Bonus | Reason |

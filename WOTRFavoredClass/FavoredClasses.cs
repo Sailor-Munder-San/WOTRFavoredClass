@@ -92,6 +92,7 @@ namespace WOTRFavoredClass
         private const string SamsaranRaceGuid = "69ad3e90baf7442c9df956170c7206f0";
         private const string ChangelingRaceGuid = "bc9b8d879d104455895c98e31f8d8503";
         private const string NagajiRaceGuid = "4e6e156b707f47c5993ac9262ca19a56";
+        private const string OrcRaceGuid = "7088a348ef0646dabdb3900fb187fb21";
 
         // Classes
         private const string BarbarianClassGuid = "f7d7eb166b3dd594fb330d085df41853";
@@ -117,6 +118,8 @@ namespace WOTRFavoredClass
         private const string OracleClassGuid = "20ce9bf8af32bee4c8557a045ab499b1";
         private const string DruidClassGuid = "610d836f3a3a9ed42a4349b62f002e96";
         private const string HunterClassGuid = "34ecd1b5e1b90b9498795791b0855239";
+        private const string CavalierClassGuid = "3adc3439f98cb534ba98df59838f02c7";
+        private const string ShifterClassGuid = "a406d6ebea5c46bba3160246be03e96f";
         // Third-party classes (Swashbuckler mod, MicroscopicContentExpansion).
         // Class-keyed bonuses only attach if the class is actually in the game's list.
         private const string SwashbucklerClassGuid = "338abf2723c14c1ab0f17cd7e3020444";
@@ -127,6 +130,45 @@ namespace WOTRFavoredClass
         // ENEMY with the slayer as caster.
         private const string SlayerStudyTargetBuffGuid = "45548967b714e254aa83f23354f174b0";
         private const string SlayerDefensiveStudyBuffGuid = "cbbff1a2e7a3a5b47b41406701de305b";
+
+        // Cavalier challenge: the vanilla challenge ability puts this buff on the challenged
+        // foe with the cavalier as its caster, which is what the damage bonus keys off.
+        private const string CavalierChallengeTargetBuffGuid = "4f0218323ad379248b69de8a9501159f";
+        private const string CavalierBannerBuffGuid = "4d3b79e464282af4897c1d860bf9e9b3";
+        private const string CavalierBannerGreaterBuffGuid = "2f4f532386870824d8f586ae18666f11";
+
+        // Cavalier mount and shifter pet-side counters (same MasterFeatureRank shape as the
+        // druid/hunter companion bonuses: the feature lives on the pet, its magnitude reads
+        // the master's counter rank).
+        private const string CavalierMountHPPetGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be0";
+        private const string CavalierMountSpeedPetGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be2";
+        private const string CavalierMountHPCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bdf";
+        private const string CavalierMountSpeedCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be1";
+        // Shifter aspect — the "minor form". Confirmed from the live blueprint to be a real
+        // per-day pool (base 3, +1 per class level), not an at-will toggle, which is what makes
+        // the tabletop "minutes per day" bonus portable at all. See the shifter entry below.
+        private const string ShifterAspectResourceGuid = "1b096f343ea54ae0a4e3b6cf404bf62d";
+
+        // The buffs the seven shifter claw modals apply — one per level tier. These identify
+        // "the shifter claws ability is switched on", which the weapon blueprint cannot: only
+        // ShifterClaw1d10x3 is shifter-specific, so the lower tiers reuse the generic claw
+        // weapons that animal forms also carry. ShifterClawVisualBuff is deliberately excluded:
+        // it is cosmetic and says nothing about whether the claws are actually in use.
+        private static readonly string[] ShifterClawBuffGuids =
+        {
+            "02070af90de345c6a82a8cf469a65080", // Level 1
+            "1bb67316c37e400888e0489ee8d64067", // Level 3
+            "c9441167a3b84fb48729e55f29a9df64", // Level 7
+            "13243d59d212463d9ab3f36e646aa40c", // Level 11
+            "6e31c78ce801444aad398248b66a22b8", // Level 13
+            "cb51194e75ca45bc9fedf9a09c50b827", // Level 17
+            "494d127890c3498fb3dbf3a53dcb4fe6", // Level 19
+        };
+
+        private const string ChallengeDmgEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bdd";
+        private const string ChallengeAoODmgEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bed";
+        private const string DefensiveInstinctEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be9";
+        private const string ShifterClawDmgEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bee";
 
         // Kineticist blast base abilities (GUIDs identical to Kingmaker's; variant
         // forms are child abilities matched via Parent by AbilityDamageBonusPerRank).
@@ -413,13 +455,28 @@ namespace WOTRFavoredClass
 
         // Guids of all per-class bonus selections — used by the level-up queue patch
         // to glue each bonus card right behind its favored-class pick card.
-        internal static readonly HashSet<string> BonusSelectionGuids = new();
+        // BlueprintGuid twins of the identifiers the runtime patches compare against. Comparing
+        // BlueprintGuid directly avoids the 32-character string that AssetGuid.ToString()
+        // allocates on every check, which matters because the progression gate runs over every
+        // feature of every level entry for every unit that levels — including whole areas of
+        // NPCs auto-levelling on load. Install fills the set; the two singles are parsed once.
+        internal static readonly BlueprintGuid SelectionAssetGuid = BlueprintGuid.Parse(SelectionGuid);
+        internal static readonly BlueprintGuid MultitalentedAssetGuid = BlueprintGuid.Parse(MultitalentedGuid);
+        internal static readonly HashSet<BlueprintGuid> BonusSelectionAssetGuids = new();
 
         // Every blueprint guid this mod creates — used by the clean-uninstall strip.
         internal static readonly HashSet<string> AllModGuids = new();
         // Same set as BlueprintGuid structs for allocation-free checks on hot paths
         // (the player-faction gate runs on every fact grant in the game).
         internal static readonly HashSet<BlueprintGuid> AllModBlueprintGuids = new();
+
+        // The cavalier banner's own scaling knob. Both of the banner buff's effects
+        // (SavingThrowBonusAgainstDescriptor and ChargeAttackBonus) take their magnitude from
+        // this one ContextRankConfig, so raising what it returns raises the banner bonus itself
+        // — which is literally what "+1/4 to the cavalier's banner bonus" asks for. Holding the
+        // instances lets the patch identify them with a reference comparison and nothing more.
+        internal static readonly List<Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig> BannerRankConfigs = new();
+        internal const string BannerBonusCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf3";
 
         internal enum BonusDisplayKind { Flat, Feet, SkillRanks, Feats, HitPoints }
 
@@ -549,7 +606,14 @@ namespace WOTRFavoredClass
 
         public static void Install()
         {
+            // Every registry is reset together, not just the guid list. BannerRankConfigs is the
+            // one that actually matters: it holds references to component instances belonging to
+            // a vanilla blueprint, so a second Install after the blueprints were reloaded would
+            // otherwise leave stale objects in the list alongside the live ones.
             AllModGuids.Clear();
+            AllModBlueprintGuids.Clear();
+            BonusSelectionAssetGuids.Clear();
+            BannerRankConfigs.Clear();
             AllModGuids.Add(SelectionGuid);
             AllModGuids.Add(HpFeatureGuid);
             AllModGuids.Add(SkillFeatureGuid);
@@ -640,7 +704,7 @@ namespace WOTRFavoredClass
                     .SetIsClassFeature(true)
                     .AddToAllFeatures(bonusItems.Select(g => (Blueprint<BlueprintFeatureReference>)g).ToArray())
                     .Configure();
-                BonusSelectionGuids.Add(bonusSelGuid);
+                BonusSelectionAssetGuids.Add(BlueprintGuid.Parse(bonusSelGuid));
                 AllModGuids.Add(bonusSelGuid);
                 AllModGuids.Add(progGuid);
 
@@ -767,7 +831,7 @@ namespace WOTRFavoredClass
                 .AddToAllFeatures(progressionGuids.Select(g => (Blueprint<BlueprintFeatureReference>)g)
                     .Append(NoneFeatureGuid).ToArray())
                 .Configure();
-            // Deliberately NOT in BonusSelectionGuids: that set drives the level-up patch
+            // Deliberately NOT in BonusSelectionAssetGuids: that set drives the level-up patch
             // that re-anchors a per-class BONUS card behind its favored class pick. This is
             // a class pick itself, and adding it there would make the two compete for the
             // same slot behind the first card.
@@ -802,7 +866,32 @@ namespace WOTRFavoredClass
             // for old-save compatibility).
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b55")] = (4, BonusDisplayKind.Flat);
 
+            CacheBannerRankConfigs();
+
             Main.Log($"Favored class system installed: {progressionGuids.Count} class progressions, selection attached to {attached} basic-feat L1 entry (expected 1).");
+        }
+
+        // Finds the rank config each banner buff scales from, so the patch can recognise it by
+        // reference. Nothing is written to the vanilla blueprint — the components stay exactly as
+        // the game shipped them, and a cavalier without the bonus is unaffected because the patch
+        // exits on a zero counter rank.
+        private static void CacheBannerRankConfigs()
+        {
+            foreach (var guid in new[] { CavalierBannerBuffGuid, CavalierBannerGreaterBuffGuid })
+            {
+                var buff = ResourcesLibrary.TryGetBlueprint<Kingmaker.UnitLogic.Buffs.Blueprints.BlueprintBuff>(
+                    BlueprintGuid.Parse(guid));
+                if (buff == null) continue;
+                foreach (var component in buff.ComponentsArray)
+                {
+                    if (component is Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig config
+                        && config.Type == Kingmaker.Enums.AbilityRankType.Default)
+                    {
+                        BannerRankConfigs.Add(config);
+                    }
+                }
+            }
+            Main.Log($"Cavalier banner rank configs cached: {BannerRankConfigs.Count} (expected 1).");
         }
 
         private sealed class RacialBonusDef
@@ -1158,6 +1247,60 @@ namespace WOTRFavoredClass
                 },
                 new()
                 {
+                    Key = "ChallengeDmgEffect", Guid = ChallengeDmgEffectGuid, Ranks = 10,
+                    DisplayName = "Damage Against Challenged Targets",
+                    Description = "+1 damage per rank against the target of the cavalier's challenge.",
+                    Components = f => f.AddComponent<DamageBonusAgainstCasterBuffTargetPerRank>(c =>
+                        c.m_Buffs = new[]
+                        {
+                            BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(CavalierChallengeTargetBuffGuid),
+                        }),
+                },
+                new()
+                {
+                    Key = "ChallengeAoODmgEffect", Guid = ChallengeAoODmgEffectGuid, Ranks = 10,
+                    DisplayName = "Attack of Opportunity Damage Against Challenged Targets",
+                    Description = "+1 damage per rank on attacks of opportunity against the target of the cavalier's challenge.",
+                    Components = f => f.AddComponent<DamageBonusAgainstCasterBuffTargetPerRank>(c =>
+                    {
+                        c.m_Buffs = new[]
+                        {
+                            BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(CavalierChallengeTargetBuffGuid),
+                        };
+                        c.OnlyAttackOfOpportunity = true;
+                    }),
+                },
+                new()
+                {
+                    Key = "ShifterAspectEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf1", Ranks = 7,
+                    DisplayName = "Bonus Shifter Aspect",
+                    Description = "+1 use per day of shifter aspect per rank.",
+                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                        c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(ShifterAspectResourceGuid)),
+                },
+                new()
+                {
+                    Key = "ShifterClawDmgEffect", Guid = ShifterClawDmgEffectGuid, Ranks = 4,
+                    DisplayName = "Claw Damage",
+                    Description = "+1 damage per rank on attacks made with the shifter claws ability.",
+                    Components = f => f.AddComponent<WeaponCategoryDamageBonusPerRank>(c =>
+                    {
+                        c.Categories = new[] { Kingmaker.Enums.WeaponCategory.Claw };
+                        c.m_RequiredOwnerBuffs = ShifterClawBuffGuids
+                            .Select(g => BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(g))
+                            .ToArray();
+                    }),
+                },
+                new()
+                {
+                    Key = "DefensiveInstinctEffect", Guid = DefensiveInstinctEffectGuid, Ranks = 5,
+                    DisplayName = "Dodge Bonus Against Large Creatures",
+                    Description = "+1 dodge bonus to Armor Class per rank against creatures of size Large or larger.",
+                    Components = f => f.AddComponent<ACBonusAgainstLargerCreaturesPerRank>(c =>
+                        c.MinimumSize = Kingmaker.Enums.Size.Large),
+                },
+                new()
+                {
                     Key = "JudgmentEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b65", Ranks = 3,
                     DisplayName = "Bonus Judgment",
                     Description = "+1 use per day of judgment per rank.",
@@ -1219,6 +1362,34 @@ namespace WOTRFavoredClass
                 .AddContextRankConfig(ContextRankConfigs.FeatureRank("3a1b6cf1d0f34d5e9b7a2c8e4f6a1bc0", useMaster: true, max: 20))
                 .Configure();
             AllModGuids.Add(CompanionHPPetGuid);
+
+            // Cavalier mount. Mechanically identical to the druid/hunter companion bonuses —
+            // a mount is an animal companion, so it is a pet like any other and the same
+            // MasterFeatureRank plumbing applies. Separate blueprints rather than reusing the
+            // companion ones so the two counters stay independent: a character could in
+            // principle hold both, and each must scale from its own picks.
+            FeatureConfigurator.New("ZFCWCavalierMountHPFeature", CavalierMountHPPetGuid)
+                .SetDisplayName(LocalizationTool.CreateString("ZFCW.CavalierMountHPFeature.Name", "Mount Hit Points", tagEncyclopediaEntries: false))
+                .SetDescription(LocalizationTool.CreateString("ZFCW.CavalierMountHPFeature.Desc",
+                    "This mount has bonus hit points granted by its rider's favored class bonus.", tagEncyclopediaEntries: false))
+                .SetIsClassFeature(true)
+                .AddContextStatBonus(StatType.HitPoints, ContextValues.Rank())
+                .AddContextRankConfig(ContextRankConfigs.FeatureRank(CavalierMountHPCounterGuid, useMaster: true, max: 20))
+                .Configure();
+            AllModGuids.Add(CavalierMountHPPetGuid);
+
+            FeatureConfigurator.New("ZFCWCavalierMountSpeedFeature", CavalierMountSpeedPetGuid)
+                .SetDisplayName(LocalizationTool.CreateString("ZFCW.CavalierMountSpeedFeature.Name", "Mount Speed", tagEncyclopediaEntries: false))
+                .SetDescription(LocalizationTool.CreateString("ZFCW.CavalierMountSpeedFeature.Desc",
+                    "This mount has a bonus to its base speed granted by its rider's favored class bonus.", tagEncyclopediaEntries: false))
+                .SetIsClassFeature(true)
+                // Div-step 5 then multiplied by 5, so five picks are worth +5 feet and four are
+                // worth nothing — the tabletop wording, and the same arithmetic the
+                // character-side SpeedEffect performs (Multiplier = 5 over a floor(rank/5) rank).
+                .AddContextStatBonus(StatType.Speed, ContextValues.Rank(), multiplier: 5)
+                .AddContextRankConfig(ContextRankConfigs.FeatureRank(CavalierMountSpeedCounterGuid, useMaster: true, max: 20).WithDivStepProgression(5))
+                .Configure();
+            AllModGuids.Add(CavalierMountSpeedPetGuid);
 
             FeatureConfigurator.New("ZFCWCompanionNaturalACFeature", CompanionNaturalACPetGuid)
                 .SetDisplayName(LocalizationTool.CreateString("ZFCW.CompanionNaturalACFeature.Name", "Companion Natural Armor", tagEncyclopediaEntries: false))
@@ -1332,6 +1503,14 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to one of the paladin's energy resistances — acid, cold, electricity or fire (maximum +10 each).",
                     Races = new[] { HumanRaceGuid },
                     Classes = new[] { PaladinClassGuid },
+                },
+                new()
+                {
+                    Key = "ShifterEnergyRes", FolderGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be8",
+                    DisplayName = "Energy Resistance",
+                    Description = "Gain energy resistance 1 against acid, cold, electricity or fire. Each time the shifter selects this reward, increase that energy resistance by 1, to a maximum of energy resistance 10.",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
                 },
             };
 
@@ -2344,6 +2523,164 @@ namespace WOTRFavoredClass
                     RewardSelectionGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bd7",
                     RewardFeatures = BuildKnownSpellRewardFeatures("ShamanKitsuneKnownSpell", ShamanKitsuneKnownSpellLevelGuids,
                         ShamanClassGuid, 8, KitsuneShamanSpellListGuid).ToArray(),
+                },
+                // Wave 11. Cavalier and shifter — two classes that had a favored class
+                // progression but no racial bonuses at all, so the only options were the
+                // universal hit point and skill rank.
+                new()
+                {
+                    Key = "ChallengeDmgAasimar", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bde",
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Damage Against Challenged Targets (+1/4)", EffectGuid = ChallengeDmgEffectGuid,
+                    Description = "Add +1/4 to the cavalier's bonus on damage against targets of his challenge.",
+                    Races = new[] { AasimarRaceGuid },
+                    Classes = new[] { CavalierClassGuid },
+                },
+                new()
+                {
+                    Key = "ChallengeDmgDwarf", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bea",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Damage Against Challenged Targets (+1/2)", EffectGuid = ChallengeDmgEffectGuid,
+                    Description = "Add +1/2 to the cavalier's bonus to damage against targets of his challenge.",
+                    Races = new[] { DwarfRaceGuid },
+                    Classes = new[] { CavalierClassGuid },
+                },
+                new()
+                {
+                    Key = "CavalierMountHP", FeatureGuid = CavalierMountHPCounterGuid,
+                    Divisor = 1, Ranks = 20,
+                    DisplayName = "Mount Hit Points",
+                    Description = "Add +1 hit point to the cavalier's mount. If the cavalier ever replaces his mount, the new mount gains these bonus hit points.",
+                    Races = new[] { ElfRaceGuid, GoblinRaceGuid, HalfOrcRaceGuid },
+                    Classes = new[] { CavalierClassGuid },
+                    Components = f => f.AddComponent<GrantFeatureToPetsWhileActive>(c =>
+                        c.m_Feature = BlueprintTool.GetRef<BlueprintUnitFactReference>(CavalierMountHPPetGuid)),
+                },
+                new()
+                {
+                    Key = "CavalierMountSpeed", FeatureGuid = CavalierMountSpeedCounterGuid,
+                    Divisor = 5, Ranks = 20, DisplayKind = BonusDisplayKind.Feet,
+                    DisplayName = "Mount Speed (+1 ft.)",
+                    Description = "Add +1 to the cavalier's mounted base speed. In combat this has no effect unless the cavalier has selected this reward five times (or another increment of five). " +
+                        "If the cavalier ever replaces his mount, the new mount gains this bonus to its speed.",
+                    Races = new[] { GnomeRaceGuid, HalfElfRaceGuid, NagajiRaceGuid },
+                    Classes = new[] { CavalierClassGuid },
+                    Components = f => f.AddComponent<GrantFeatureToPetsWhileActive>(c =>
+                        c.m_Feature = BlueprintTool.GetRef<BlueprintUnitFactReference>(CavalierMountSpeedPetGuid)),
+                },
+                new()
+                {
+                    Key = "CavalierBanner", FeatureGuid = BannerBonusCounterGuid,
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Banner Bonus (+1/4)",
+                    // No component and no effect feature: the counter exists only to hold ranks.
+                    // ContextRankConfig_GetValue_BannerPatch reads that rank and raises the value
+                    // the banner already computes, so the bonus flows through the game's own
+                    // scaling rather than sitting beside it.
+                    Description = "Add +1/4 to the cavalier's banner bonus.",
+                    Races = new[] { HumanRaceGuid, KitsuneRaceGuid },
+                    Classes = new[] { CavalierClassGuid },
+                },
+                new()
+                {
+                    Key = "ChallengeAoODmgHalfling", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bef",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Attack of Opportunity Damage Against Challenged Targets (+1/2)",
+                    EffectGuid = ChallengeAoODmgEffectGuid,
+                    Description = "Add +1/2 to the cavalier's effective class level for the purposes of determining the damage he deals when making an attack of opportunity against a challenged foe.",
+                    Races = new[] { HalflingRaceGuid },
+                    Classes = new[] { CavalierClassGuid },
+                },
+                new()
+                {
+                    Key = "ShifterMinorForm", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf2",
+                    Divisor = 3, Ranks = 20,
+                    DisplayName = "Bonus Shifter Aspect (+1/3)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf1",
+                    // The tabletop bonus is measured in minutes ("add 1/3 to the number of minutes
+                    // the shifter can assume her minor form each day"). WOTR does not track the
+                    // form in minutes at all — it meters the aspect as a per-day resource
+                    // (ShifterAspectResource, base 3 plus one per class level), so the bonus is
+                    // carried over as uses rather than minutes. Same pool, same "more minor form
+                    // per day" effect; the unit is the game's, not the book's.
+                    Description = "Add +1/3 to the number of times per day the shifter can assume her minor form.",
+                    Races = new[] { HumanRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                },
+                new()
+                {
+                    Key = "ShifterClawDmg", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf0",
+                    Divisor = 5, Ranks = 20,
+                    DisplayName = "Claw Damage (+1/5)", EffectGuid = ShifterClawDmgEffectGuid,
+                    Description = "Add +1/5 to the damage dealt when using the shifter claws ability.",
+                    Races = new[] { OrcRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                },
+                new()
+                {
+                    Key = "SpeedShifter", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1beb",
+                    Divisor = 5, Ranks = 20, DisplayKind = BonusDisplayKind.Feet,
+                    DisplayName = "Bonus Speed (+1 ft.)", EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b1a",
+                    Description = "Add +1 to the shifter's base speed. In combat this option has no effect unless the shifter has selected it five times (or another increment of five).",
+                    Races = new[] { ElfRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                },
+                new()
+                {
+                    Key = "ShifterDefensiveInstinct", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bec",
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Dodge Bonus Against Large Creatures (+1/4)", EffectGuid = DefensiveInstinctEffectGuid,
+                    Description = "Increase the Armor Class bonus from defensive instinct by 1/4 against creatures of size Large or larger.",
+                    Races = new[] { HalflingRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                },
+                new()
+                {
+                    Key = "ShifterAcidRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be4",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Acid Resistance",
+                    Description = "Gain +1 acid resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                    Folder = "ShifterEnergyRes",
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Acid, value: ContextValues.Constant(1)),
+                },
+                new()
+                {
+                    Key = "ShifterColdRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be5",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Cold Resistance",
+                    Description = "Gain +1 cold resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                    Folder = "ShifterEnergyRes",
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Cold, value: ContextValues.Constant(1)),
+                },
+                new()
+                {
+                    Key = "ShifterElecRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be6",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Electricity Resistance",
+                    Description = "Gain +1 electricity resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                    Folder = "ShifterEnergyRes",
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Electricity, value: ContextValues.Constant(1)),
+                },
+                new()
+                {
+                    Key = "ShifterFireRes", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1be7",
+                    Divisor = 1, Ranks = 10,
+                    DisplayName = "Fire Resistance",
+                    Description = "Gain +1 fire resistance (maximum +10).",
+                    Races = new[] { GnomeRaceGuid },
+                    Classes = new[] { ShifterClassGuid },
+                    Folder = "ShifterEnergyRes",
+                    Components = f => f
+                        .AddDamageResistanceEnergy(type: Kingmaker.Enums.Damage.DamageEnergyType.Fire, value: ContextValues.Constant(1)),
                 },
                 new()
                 {

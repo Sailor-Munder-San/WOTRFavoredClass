@@ -126,6 +126,141 @@ namespace WOTRFavoredClass
         public void OnEventDidTrigger(RuleCalculateAbilityParams evt) { }
     }
 
+    // Damage bonus per rank against a target carrying one of the listed buffs CAST BY THE
+    // OWNER (cavalier challenge: the vanilla challenge ability puts CavalierChallengeBuffTarget
+    // on the challenged foe with the cavalier as its caster). Requiring the caster to be the
+    // owner is what keeps two cavaliers from feeding off each other's challenge, the same
+    // reasoning as ACBonusAgainstCasterBuffPerRank below.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a16")]
+    public class DamageBonusAgainstCasterBuffTargetPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RuleAttackWithWeapon>, IRulebookHandler<RuleAttackWithWeapon>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        public BlueprintBuffReference[] m_Buffs = new BlueprintBuffReference[0];
+        public int Divisor = 1;
+
+        // Halfling cavalier: "+1/2 to effective class level for determining the damage he deals
+        // when making an attack of opportunity against a challenged foe". The challenge's extra
+        // damage IS the cavalier's class level, so raising that level for this purpose is simply
+        // more damage — the same bonus as the Aasimar/Dwarf entries, restricted to attacks of
+        // opportunity. RuleAttackWithWeapon exposes IsAttackOfOpportunity directly.
+        public bool OnlyAttackOfOpportunity;
+
+        public void OnEventAboutToTrigger(RuleAttackWithWeapon evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            if (OnlyAttackOfOpportunity && !evt.IsAttackOfOpportunity) return;
+            var target = evt.Target;
+            if (target == null) return;
+            // Plain nested loops, no LINQ or closures: this runs on every weapon attack.
+            bool marked = false;
+            foreach (var buff in target.Buffs.Enumerable)
+            {
+                if (buff.Context?.MaybeCaster != Owner) continue;
+                for (int i = 0; i < m_Buffs.Length; i++)
+                {
+                    if (m_Buffs[i].Get() == buff.Blueprint) { marked = true; break; }
+                }
+                if (marked) break;
+            }
+            if (marked)
+            {
+                evt.AddTemporaryModifier(
+                    evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
+            }
+        }
+
+        public void OnEventDidTrigger(RuleAttackWithWeapon evt) { }
+    }
+
+    // Damage bonus per rank on attacks made with a weapon of one of the listed categories, and
+    // optionally only while the owner carries one of the listed buffs (orc shifter: "add 1/5 to
+    // the damage dealt when using the shifter claws ability").
+    //
+    // Both halves are needed to mean "the shifter claws ability" specifically. The category alone
+    // is too broad, because an animal form's claws are claws too. The buff alone is too broad in
+    // the other direction, because the modal stays on while its owner swings a sword. WOTR ships
+    // only ONE shifter-specific claw weapon blueprint (ShifterClaw1d10x3) against seven claw
+    // modals, so the lower-level claws reuse the generic Claw1dX blueprints that animal forms
+    // also use — which is why matching the weapon blueprint cannot work and the modal's own buff
+    // is the thing to key on.
+    //
+    // The category is tested first: it is a field read, whereas the buff scan walks a collection,
+    // and the overwhelming majority of attacks in play are not claws at all.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a18")]
+    public class WeaponCategoryDamageBonusPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RuleAttackWithWeapon>, IRulebookHandler<RuleAttackWithWeapon>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        public Kingmaker.Enums.WeaponCategory[] Categories = new Kingmaker.Enums.WeaponCategory[0];
+        public BlueprintBuffReference[] m_RequiredOwnerBuffs = new BlueprintBuffReference[0];
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(RuleAttackWithWeapon evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var category = evt.Weapon?.Blueprint?.Category;
+            if (category == null) return;
+            // Plain loops, no LINQ: this runs on every weapon attack.
+            bool match = false;
+            for (int i = 0; i < Categories.Length; i++)
+            {
+                if (Categories[i] == category.Value) { match = true; break; }
+            }
+            if (!match) return;
+
+            if (m_RequiredOwnerBuffs.Length > 0)
+            {
+                bool active = false;
+                foreach (var buff in Owner.Buffs.Enumerable)
+                {
+                    for (int i = 0; i < m_RequiredOwnerBuffs.Length; i++)
+                    {
+                        if (m_RequiredOwnerBuffs[i].Get() == buff.Blueprint) { active = true; break; }
+                    }
+                    if (active) break;
+                }
+                if (!active) return;
+            }
+
+            evt.AddTemporaryModifier(
+                evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
+        }
+
+        public void OnEventDidTrigger(RuleAttackWithWeapon evt) { }
+    }
+
+    // Dodge AC bonus per rank against attackers of a given size or larger (shifter halfling:
+    // "increase the AC bonus from defensive instinct by 1/4 against creatures of size Large or
+    // larger"). Reads State.Size rather than OriginalSize so an enlarged attacker counts, which
+    // is how the tabletop size categories work in play.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a17")]
+    public class ACBonusAgainstLargerCreaturesPerRank : UnitFactComponentDelegate,
+        ITargetRulebookHandler<Kingmaker.RuleSystem.Rules.RuleCalculateAC>,
+        IRulebookHandler<Kingmaker.RuleSystem.Rules.RuleCalculateAC>,
+        ISubscriber, ITargetRulebookSubscriber
+    {
+        public Kingmaker.Enums.Size MinimumSize = Kingmaker.Enums.Size.Large;
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var attacker = evt.Initiator;
+            if (attacker == null) return;
+            if (attacker.State.Size < MinimumSize) return;
+            evt.AddModifier(bonus, Fact, ModifierDescriptor.Dodge);
+        }
+
+        public void OnEventDidTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt) { }
+    }
+
     // "+1/4 dodge bonus to AC against favored enemies": applies to the owner's AC
     // only when the attacker matches one of the owner's favored enemy entries.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
@@ -742,15 +877,24 @@ namespace WOTRFavoredClass
             if (fact != null) pet.Descriptor.Facts.Remove(fact);
         }
 
-        public void HandleAddCompanion(UnitEntityData unit)
+        public void HandleAddCompanion(UnitEntityData unit) => TryGrantIfOurPet(unit);
+
+        // Also handled, and not redundant with OnTurnOn. Verified symptom: a save in which the
+        // master held Companion Hit Points at rank 3 while the pet carried no companion feature
+        // at all, so neither OnTurnOn nor HandleAddCompanion had reached it. Which of the two
+        // missed is not established — OnTurnOn walking an empty Owner.Pets before the pet is
+        // linked on load, and a companion restored rather than added, are both consistent with
+        // it. This covers the remaining entry point either way; TryGrant is idempotent, so an
+        // extra call costs nothing.
+        public void HandleCompanionActivated(UnitEntityData unit) => TryGrantIfOurPet(unit);
+
+        void TryGrantIfOurPet(UnitEntityData unit)
         {
             if (unit != null && unit.IsPet && unit.Master == Owner)
             {
                 TryGrant(unit);
             }
         }
-
-        public void HandleCompanionActivated(UnitEntityData unit) { }
 
         public void HandleCompanionRemoved(UnitEntityData unit, bool stayInGame) { }
 

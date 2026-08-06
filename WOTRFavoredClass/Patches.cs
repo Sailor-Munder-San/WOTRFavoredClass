@@ -27,8 +27,8 @@ namespace WOTRFavoredClass
         static bool Prefix(LevelUpState __instance, IFeatureSelection selection, ref FeatureSelectionState __result)
         {
             if (selection is not BlueprintFeatureSelection bp) return true;
-            var guid = bp.AssetGuid.ToString();
-            if (guid != FavoredClasses.SelectionGuid && guid != FavoredClasses.MultitalentedGuid) return true;
+            var guid = bp.AssetGuid;
+            if (guid != FavoredClasses.SelectionAssetGuid && guid != FavoredClasses.MultitalentedAssetGuid) return true;
             if (__instance?.Unit?.Unit?.IsPet != true) return true;
             __result = null;
             return false;
@@ -39,16 +39,16 @@ namespace WOTRFavoredClass
         {
             if (__result == null) return;
             if (selection is not BlueprintFeatureSelection bp) return;
-            var guid = bp.AssetGuid.ToString();
+            var guid = bp.AssetGuid;
             var list = __instance.Selections;
 
             // The per-class bonus selection is granted by the favored-class progression's
             // level entry, so the engine passes parent=null. Anchor it behind the favored
             // class pick card by looking that card up directly; on regular level-ups
             // (no pick card in queue) it simply stays appended.
-            if (!FavoredClasses.BonusSelectionGuids.Contains(guid)) return;
+            if (!FavoredClasses.BonusSelectionAssetGuids.Contains(guid)) return;
             int fcIdx = list.FindIndex(s =>
-                (s.Selection as BlueprintFeatureSelection)?.AssetGuid.ToString() == FavoredClasses.SelectionGuid);
+                (s.Selection as BlueprintFeatureSelection)?.AssetGuid == FavoredClasses.SelectionAssetGuid);
             if (fcIdx < 0) return;
             if (!list.Remove(__result)) return;
             list.Insert(fcIdx + 1, __result);
@@ -70,6 +70,14 @@ namespace WOTRFavoredClass
     // favored class is a far worse failure than a stray fact on a bystander — and during
     // chargen the player's unit is not in the world yet, so it is never caught here.
     //
+    // Pets are excluded here as well, and for a different reason: an animal companion IS on the
+    // player's side, so the foreign-unit test above passes it straight through. It levels a real
+    // character class and therefore receives BasicFeatsProgression — the very progression the
+    // favored class selection hangs off — so the fact landed on every companion and travelled
+    // into the save. Dropping the card from the level-up queue (the prefix on
+    // LevelUpState.AddSelection) is not enough on its own: that governs the UI, while this path
+    // grants the fact directly. Confirmed in a save where the companion carried the selection.
+    //
     // Filtering replaces the list reference rather than mutating it: the caller passes
     // levelEntry.Features for progressions, which is the blueprint's own list.
     [HarmonyPatch(typeof(Kingmaker.UnitLogic.Class.LevelUp.Actions.LevelUpHelper),
@@ -81,7 +89,9 @@ namespace WOTRFavoredClass
         {
             if (features == null || features.Count == 0) return;
             var u = unit?.Unit;
-            if (u == null || !u.IsInGame || u.IsPlayerFaction) return;
+            if (u == null) return;
+            bool foreignUnit = u.IsInGame && !u.IsPlayerFaction;
+            if (!foreignUnit && !u.IsPet) return;
 
             bool anyOurs = false;
             for (int i = 0; i < features.Count; i++)
@@ -101,8 +111,11 @@ namespace WOTRFavoredClass
         static bool IsOurSelection(BlueprintFeatureBase feature)
         {
             if (feature == null) return false;
-            var guid = feature.AssetGuid.ToString();
-            return guid == FavoredClasses.SelectionGuid || guid == FavoredClasses.MultitalentedGuid;
+            // BlueprintGuid comparison, not string: this runs for every feature of every level
+            // entry of every unit that levels, so an AssetGuid.ToString() here allocates a
+            // 32-character string per feature across a whole area of NPCs levelling on load.
+            var guid = feature.AssetGuid;
+            return guid == FavoredClasses.SelectionAssetGuid || guid == FavoredClasses.MultitalentedAssetGuid;
         }
     }
 
@@ -152,7 +165,7 @@ namespace WOTRFavoredClass
         static void Prefix(Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateLevelUpFeature __instance)
         {
             var bp = __instance.FeatureInfo?.BlueprintFeature;
-            if (bp == null || !FavoredClasses.AllModGuids.Contains(bp.AssetGuid.ToString())) return;
+            if (bp == null || !FavoredClasses.AllModBlueprintGuids.Contains(bp.AssetGuid)) return;
             __instance.m_IsAquiredFeature = false;
             __instance.m_IsJustSelected = false;
         }
@@ -317,6 +330,51 @@ namespace WOTRFavoredClass
             if (blueprint == null) return;
             if (!FavoredClasses.AllModBlueprintGuids.Contains(blueprint.AssetGuid)) return;
             __result = FavoredClasses.BonusSourceLabel;
+        }
+    }
+
+    // "Add +1/4 to the cavalier's banner bonus." Rather than adding a parallel bonus, this
+    // raises the number the banner already computes — which is what the tabletop line actually
+    // says, and the only thing that works: both banner effects apply their modifier with
+    // ModifierDescriptor.Morale, and same-descriptor bonuses do not stack, so a second component
+    // would be swallowed rather than added.
+    //
+    // Both effects read one ContextRankConfig on the banner buff
+    // (SavingThrowBonusAgainstDescriptor computes Bonus.Calculate() + Value; ChargeAttackBonus
+    // uses Bonus alone), so a single number governs the whole banner. The rank is resolved
+    // against the buff's CASTER — ContextRankConfig.GetBaseValue opens by taking
+    // MechanicsContext.MaybeCaster — which is the cavalier even though the buff sits on an ally,
+    // and that is what makes the cavalier's own counter reachable from here.
+    //
+    // Cost: ContextRankConfig.GetValue has exactly one caller, MechanicsContext.RecalculateRanks,
+    // so ranks are computed when a context is built or refreshed rather than per roll. The guard
+    // is a reference comparison against the one config cached at install, so every other rank
+    // config in the game pays a single failed reference compare.
+    [HarmonyPatch(typeof(Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig),
+        nameof(Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig.GetValue))]
+    internal static class ContextRankConfig_GetValue_BannerPatch
+    {
+        [HarmonyPostfix]
+        static void Postfix(
+            Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig __instance,
+            Kingmaker.UnitLogic.Mechanics.MechanicsContext context,
+            ref int __result)
+        {
+            var configs = FavoredClasses.BannerRankConfigs;
+            bool ours = false;
+            for (int i = 0; i < configs.Count; i++)
+            {
+                if (ReferenceEquals(configs[i], __instance)) { ours = true; break; }
+            }
+            if (!ours) return;
+
+            var caster = context?.MaybeCaster;
+            if (caster == null) return;
+            var counter = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(FavoredClasses.BannerBonusCounterGuid);
+            if (counter == null) return;
+            int rank = caster.Descriptor?.Progression?.Features?.GetRank(counter) ?? 0;
+            if (rank <= 0) return;
+            __result += rank / 4;
         }
     }
 
