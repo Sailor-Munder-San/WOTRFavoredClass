@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>WOTRFavoredClass</AssemblyName>
     <RootNamespace>WOTRFavoredClass</RootNamespace>
-    <Version>0.1.8</Version>
+    <Version>0.1.9</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>

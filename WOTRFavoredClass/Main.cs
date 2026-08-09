@@ -19,6 +19,7 @@ namespace WOTRFavoredClass
             ModEntry = modEntry;
             Enabled = true;
             modEntry.OnGUI = OnGUI;
+            modEntry.OnUpdate = (_, _) => Diagnostics.Tick();
             var harmony = new Harmony(modEntry.Info.Id);
             harmony.PatchAll(typeof(Main).Assembly);
             Log("Loaded, waiting for BlueprintsCache init.");
@@ -27,6 +28,40 @@ namespace WOTRFavoredClass
 
         static void OnGUI(UnityModManager.ModEntry modEntry)
         {
+            UnityEngine.GUILayout.Label("— Diagnostics —");
+            bool wanted = UnityEngine.GUILayout.Toggle(Diagnostics.Enabled,
+                " Diagnostic logging (favored class picks, grants, gates, bonus components)");
+            if (wanted != Diagnostics.Enabled)
+            {
+                Diagnostics.Enabled = wanted;
+                if (wanted)
+                {
+                    Diagnostics.Reset();
+                    Diagnostics.Log("session", $"Diagnostics ON. Mod version {modEntry.Info.Version}. " +
+                        "Rare events are logged as they happen; hot paths are counted and summarised every 2 minutes.");
+                }
+                else
+                {
+                    Diagnostics.Dump("switched off");
+                    Diagnostics.Log("session", "Diagnostics OFF.");
+                }
+            }
+
+            if (Diagnostics.Enabled)
+            {
+                Diagnostics.VerboseHotPaths = UnityEngine.GUILayout.Toggle(Diagnostics.VerboseHotPaths,
+                    " Also log every hot-path event (VERY verbose — for a short repro, not an hour of play)");
+                UnityEngine.GUILayout.Label(
+                    $"    recorded: {Diagnostics.TotalEvents} events, {Diagnostics.DistinctEvents} distinct");
+                if (UnityEngine.GUILayout.Button("Write diagnostic summary to log now", UnityEngine.GUILayout.Width(400)))
+                {
+                    Diagnostics.Dump("requested");
+                }
+                UnityEngine.GUILayout.Label("Log: %USERPROFILE%\\AppData\\LocalLow\\Owlcat Games\\" +
+                    "Pathfinder Wrath Of The Righteous\\Player.log   (lines tagged [WOTRFavoredClass])");
+            }
+
+            UnityEngine.GUILayout.Space(10);
             UnityEngine.GUILayout.Label("Clean uninstall: load a save, press the button, then SAVE the game.");
             UnityEngine.GUILayout.Label("Saves made after that no longer reference this mod and load fine without it.");
             if (UnityEngine.GUILayout.Button("Strip all Favored Class data from loaded save", UnityEngine.GUILayout.Width(400)))

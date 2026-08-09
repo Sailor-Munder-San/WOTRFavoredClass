@@ -332,6 +332,29 @@ namespace WOTRFavoredClass
         // MergeIds: it is xored against the VANILLA favored-enemy feature guid, which
         // is high-entropy and shares no prefix with ours.
         private const string FavoredEnemyPickSeed = "3eb3fba584b8425b95fc4b643f5c1cd0";
+
+        // Separate seeds per pool: cleric and druid share several domains, so one seed would
+        // generate the same pick guid for the same domain in two pools and collide.
+        private const string ClericPowerUseSeed = "9c1de3f0a5b8471e8ad2f6c4e7b09d31";
+        private const string DruidPowerUseSeed = "4f7a2b6c8d0e4319b5c7e1a3f9d26804";
+        private const string WizardPowerUseSeed = "b8e04c17d2a3496f871e5b0c9a4d3f26";
+
+        // Vanilla selections the pools are derived from.
+        private const string ClericPowerUseCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b73";
+        private const string ClericPowerUseProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b74";
+        private const string ClericPowerUseRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b75";
+        private const string DruidPowerUseCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b76";
+        private const string DruidPowerUseProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b77";
+        private const string DruidPowerUseRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b78";
+        private const string WizardPowerUseCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b79";
+        private const string WizardPowerUseProgressGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7a";
+        private const string WizardPowerUseRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7b";
+
+        private const string ClericDomainsSelectionGuid = "48525e5da45c9c243a343fc6545dbdb9";
+        private const string ClericSecondDomainsSelectionGuid = "43281c3d7fe18cc4d91928395837cd1e";
+        private const string DruidDomainSelectionGuid = "5edfe84c93823d04f8c40ca2b4e0f039";
+        private const string WizardSchoolSelectionGuid = "8d4637639441f1041bee496f20af7fa3";
+        private const string WizardSpecialistSchoolSelectionGuid = "5f838049069f1ac4d804ce0862ab5110";
         private const string VanillaFavoriteEnemySel = "16cc2c937ea8d714193017780e7d4fc6";
         private const string InstantEnemyBuffGuid = "82574f7d14a28e64fab8867fbaa17715";
 
@@ -462,7 +485,6 @@ namespace WOTRFavoredClass
         // NPCs auto-levelling on load. Install fills the set; the two singles are parsed once.
         internal static readonly BlueprintGuid SelectionAssetGuid = BlueprintGuid.Parse(SelectionGuid);
         internal static readonly BlueprintGuid MultitalentedAssetGuid = BlueprintGuid.Parse(MultitalentedGuid);
-        internal static readonly HashSet<BlueprintGuid> BonusSelectionAssetGuids = new();
 
         // Every blueprint guid this mod creates — used by the clean-uninstall strip.
         internal static readonly HashSet<string> AllModGuids = new();
@@ -477,6 +499,13 @@ namespace WOTRFavoredClass
         // instances lets the patch identify them with a reference comparison and nothing more.
         internal static readonly List<Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig> BannerRankConfigs = new();
         internal const string BannerBonusCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf3";
+
+        // The banner bonus follows the same shape as every other divisor entry: the counter
+        // accumulates picks, and one rank of this effect feature is granted at each threshold, so
+        // its rank IS the earned bonus. The patch reads this rather than dividing the counter
+        // itself — which keeps the arithmetic in one place and, more importantly, gives the
+        // player a feature on the character sheet showing what the banner actually gained.
+        internal const string BannerBonusEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf4";
 
         internal enum BonusDisplayKind { Flat, Feet, SkillRanks, Feats, HitPoints }
 
@@ -612,7 +641,6 @@ namespace WOTRFavoredClass
             // otherwise leave stale objects in the list alongside the live ones.
             AllModGuids.Clear();
             AllModBlueprintGuids.Clear();
-            BonusSelectionAssetGuids.Clear();
             BannerRankConfigs.Clear();
             AllModGuids.Add(SelectionGuid);
             AllModGuids.Add(HpFeatureGuid);
@@ -702,9 +730,15 @@ namespace WOTRFavoredClass
                     .SetDisplayName(bonusSelectionName)
                     .SetDescription(bonusSelectionDesc)
                     .SetIsClassFeature(true)
+                    // The native "you must answer this" flag. FeatureSelectionState
+                    // .CanSelectAnything tests IsObligatory() first, and the level-up phase
+                    // refuses to report itself complete while an obligatory card is unanswered.
+                    // Without it the card could be left empty and the increment lost for good.
+                    // Safe to force: this card always offers the universal +1 hit point and
+                    // +1/2 skill rank, neither of which has a prerequisite.
+                    .SetObligatory()
                     .AddToAllFeatures(bonusItems.Select(g => (Blueprint<BlueprintFeatureReference>)g).ToArray())
                     .Configure();
-                BonusSelectionAssetGuids.Add(BlueprintGuid.Parse(bonusSelGuid));
                 AllModGuids.Add(bonusSelGuid);
                 AllModGuids.Add(progGuid);
 
@@ -722,6 +756,20 @@ namespace WOTRFavoredClass
                 // defensively and fall back to the class's own name.
                 var resolvedClassName = Kingmaker.Localization.LocalizationManager.CurrentPack
                     ?.GetText(cls.LocalizedName.m_Key, reportUnknown: false);
+                if (string.IsNullOrEmpty(resolvedClassName))
+                {
+                    // Falling back to cls.LocalizedName rendered correctly but WITHOUT the
+                    // suffix, so the Swashbuckler row read plain "Swashbuckler" among a column
+                    // of "X Favored Class" — a mod class whose string is not in the pack this
+                    // early. The blueprint name is always present, so derive from it instead and
+                    // keep the suffix; trailing "Class" is dropped because the internal names
+                    // read "ClericClass" while the mod ones read "Swashbuckler".
+                    resolvedClassName = cls.name ?? "";
+                    if (resolvedClassName.EndsWith("Class") && resolvedClassName.Length > 5)
+                    {
+                        resolvedClassName = resolvedClassName.Substring(0, resolvedClassName.Length - 5);
+                    }
+                }
                 var progressionName = !string.IsNullOrEmpty(resolvedClassName)
                     ? LocalizationTool.CreateString($"ZFCW.FC.{clsGuid}", $"{resolvedClassName} Favored Class", tagEncyclopediaEntries: false)
                     : cls.LocalizedName;
@@ -760,6 +808,9 @@ namespace WOTRFavoredClass
                 .SetDisplayName(selectionName)
                 .SetDescription(selectionDesc)
                 .SetIsClassFeature(true)
+                // Same reasoning; "No Favored Class" is always among the options, so declining
+                // stays possible — it just has to be said out loud rather than skipped.
+                .SetObligatory()
                 // Chargen sorts a selection into a phase by its feature group:
                 // CharGenFeatureSelectorPhaseVM.GetFeaturePriority maps Racial and the
                 // various heritage groups to the RaceFeatures phase and everything else to
@@ -831,10 +882,6 @@ namespace WOTRFavoredClass
                 .AddToAllFeatures(progressionGuids.Select(g => (Blueprint<BlueprintFeatureReference>)g)
                     .Append(NoneFeatureGuid).ToArray())
                 .Configure();
-            // Deliberately NOT in BonusSelectionAssetGuids: that set drives the level-up patch
-            // that re-anchors a per-class BONUS card behind its favored class pick. This is
-            // a class pick itself, and adding it there would make the two compete for the
-            // same slot behind the first card.
             AllModGuids.Add(MultitalentedGuid);
             AllModBlueprintGuids.Add(BlueprintGuid.Parse(MultitalentedGuid));
 
@@ -1239,6 +1286,16 @@ namespace WOTRFavoredClass
                 },
                 new()
                 {
+                    Key = "ChaosCLEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7f", Ranks = 10,
+                    DisplayName = "Chaotic Spell Caster Level",
+                    Description = "+1 caster level per rank when casting spells with the chaotic descriptor.",
+                    // The enum value is spelled Chaos, not Chaotic — which is why an earlier pass
+                    // searched for "Chaotic", found nothing, and wrote this bonus off as blocked.
+                    Components = f => f.AddComponent<IncreaseSpellDescriptorCasterLevelPerRank>(c =>
+                        c.Descriptors = Kingmaker.Blueprints.Classes.Spells.SpellDescriptor.Chaos),
+                },
+                new()
+                {
                     Key = "GoodCLEffect", Guid = GoodCLEffectGuid, Ranks = 5,
                     DisplayName = "Good Spell Caster Level",
                     Description = "+1 caster level per rank when casting spells with the good descriptor.",
@@ -1255,6 +1312,16 @@ namespace WOTRFavoredClass
                         {
                             BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(CavalierChallengeTargetBuffGuid),
                         }),
+                },
+                new()
+                {
+                    Key = "BannerBonusEffect", Guid = BannerBonusEffectGuid, Ranks = 5,
+                    DisplayName = "Banner Bonus",
+                    Description = "+1 to the cavalier's banner bonus per rank.",
+                    // No component: the banner's own ContextRankConfig is what carries the bonus,
+                    // and ContextRankConfig_GetValue_BannerPatch adds this feature's rank to it.
+                    // The feature earns its place by making the bonus visible on the sheet, the
+                    // same as every other divisor entry's effect.
                 },
                 new()
                 {
@@ -1277,6 +1344,18 @@ namespace WOTRFavoredClass
                     Description = "+1 use per day of shifter aspect per rank.",
                     Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(ShifterAspectResourceGuid)),
+                },
+                new()
+                {
+                    Key = "PickDmgEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7c", Ranks = 5,
+                    DisplayName = "Pick Damage",
+                    Description = "+1 damage per rank on attacks made with a light or heavy pick.",
+                    Components = f => f.AddComponent<WeaponCategoryDamageBonusPerRank>(c =>
+                        c.Categories = new[]
+                        {
+                            Kingmaker.Enums.WeaponCategory.LightPick,
+                            Kingmaker.Enums.WeaponCategory.HeavyPick,
+                        }),
                 },
                 new()
                 {
@@ -2491,6 +2570,16 @@ namespace WOTRFavoredClass
                 },
                 new()
                 {
+                    Key = "ChaosCL", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7e",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Chaotic Spell Caster Level (+1/2)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7f",
+                    Description = "Add +1/2 to the arcanist's effective caster level when casting spells with the chaotic descriptor.",
+                    Races = new[] { GanziRaceGuid },
+                    Classes = new[] { ArcanistClassGuid },
+                },
+                new()
+                {
                     Key = "GoodCL", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bcf",
                     Divisor = 4, Ranks = 20,
                     DisplayName = "Good Spell Caster Level (+1/4)", EffectGuid = GoodCLEffectGuid,
@@ -2524,6 +2613,60 @@ namespace WOTRFavoredClass
                     RewardFeatures = BuildKnownSpellRewardFeatures("ShamanKitsuneKnownSpell", ShamanKitsuneKnownSpellLevelGuids,
                         ShamanClassGuid, 8, KitsuneShamanSpellListGuid).ToArray(),
                 },
+                new()
+                {
+                    Key = "PreciseStrikePick", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7d",
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Precise Strike Damage with Picks (+1/4)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b7c",
+                    // Precise strike's extra damage IS the swashbuckler's class level, so raising
+                    // that level for this purpose is simply more damage on the attack — the same
+                    // reasoning as the cavalier's challenge entries.
+                    Description = "Add +1/4 to the swashbuckler's effective class level to determine the extra damage she deals because of the precise strike deed when wielding a light pick or a heavy pick.",
+                    Races = new[] { DwarfRaceGuid },
+                    Classes = new[] { SwashbucklerClassGuid },
+                },
+
+                // Wave 12. "Select one power granted at 1st level that is normally usable
+                // 3 + modifier times per day; add +1/2 to its uses." One reward feature per
+                // domain or school, generated after the loop from the game's own selections.
+                new()
+                {
+                    Key = "ClericPowerUse", FeatureGuid = ClericPowerUseCounterGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Domain Power Use (+1/2)",
+                    Description = "Select one domain power granted at 1st level that is normally usable a number of times per day equal to 3 + the cleric's Wisdom modifier. Add +1/2 to the number of uses per day of that domain power.",
+                    Races = new[] { DwarfRaceGuid, ElfRaceGuid, HalflingRaceGuid, HalfOrcRaceGuid },
+                    Classes = new[] { ClericClassGuid },
+                    ProgressGuid = ClericPowerUseProgressGuid,
+                    RewardSelectionGuid = ClericPowerUseRewardGuid,
+                    RewardFeatures = null, // one per domain, generated after the loop
+                },
+                new()
+                {
+                    Key = "DruidPowerUse", FeatureGuid = DruidPowerUseCounterGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus Domain Power Use (+1/2)",
+                    Description = "Select one domain power granted at 1st level that is normally usable a number of times per day equal to 3 + the druid's Wisdom modifier. Add +1/2 to the number of uses per day of that domain power.",
+                    Races = new[] { DwarfRaceGuid },
+                    Classes = new[] { DruidClassGuid },
+                    ProgressGuid = DruidPowerUseProgressGuid,
+                    RewardSelectionGuid = DruidPowerUseRewardGuid,
+                    RewardFeatures = null,
+                },
+                new()
+                {
+                    Key = "WizardPowerUse", FeatureGuid = WizardPowerUseCounterGuid,
+                    Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
+                    DisplayName = "Bonus School Power Use (+1/2)",
+                    Description = "Select one arcane school power at 1st level that is normally usable a number of times per day equal to 3 + the wizard's Intelligence modifier. Add +1/2 to the number of uses per day of that arcane school power.",
+                    Races = new[] { DrowRaceGuid, ElfRaceGuid, GnomeRaceGuid },
+                    Classes = new[] { WizardClassGuid },
+                    ProgressGuid = WizardPowerUseProgressGuid,
+                    RewardSelectionGuid = WizardPowerUseRewardGuid,
+                    RewardFeatures = null,
+                },
+
                 // Wave 11. Cavalier and shifter — two classes that had a favored class
                 // progression but no racial bonuses at all, so the only options were the
                 // universal hit point and skill rank.
@@ -2572,11 +2715,12 @@ namespace WOTRFavoredClass
                 {
                     Key = "CavalierBanner", FeatureGuid = BannerBonusCounterGuid,
                     Divisor = 4, Ranks = 20,
-                    DisplayName = "Banner Bonus (+1/4)",
-                    // No component and no effect feature: the counter exists only to hold ranks.
-                    // ContextRankConfig_GetValue_BannerPatch reads that rank and raises the value
-                    // the banner already computes, so the bonus flows through the game's own
-                    // scaling rather than sitting beside it.
+                    DisplayName = "Banner Bonus (+1/4)", EffectGuid = BannerBonusEffectGuid,
+                    // The counter holds picks and the effect feature holds earned bonuses, as
+                    // everywhere else. What differs is only how the effect is consumed: rather
+                    // than carrying a component, its rank is read by
+                    // ContextRankConfig_GetValue_BannerPatch and added to the value the banner
+                    // already computes, so the bonus flows through the game's own scaling.
                     Description = "Add +1/4 to the cavalier's banner bonus.",
                     Races = new[] { HumanRaceGuid, KitsuneRaceGuid },
                     Classes = new[] { CavalierClassGuid },
@@ -2952,6 +3096,14 @@ namespace WOTRFavoredClass
             }
 
             BuildFavoredEnemyPickPool();
+            BuildPowerUsePickPool(ClericPowerUseRewardGuid, ClericPowerUseSeed, "Cleric domain",
+                new[] { ClericDomainsSelectionGuid, ClericSecondDomainsSelectionGuid });
+            BuildPowerUsePickPool(DruidPowerUseRewardGuid, DruidPowerUseSeed, "Druid domain",
+                new[] { DruidDomainSelectionGuid });
+            // Both entry points: the wizard's own school card and the specialist selection it
+            // leads to, since an archetype may attach the schools through either.
+            BuildPowerUsePickPool(WizardPowerUseRewardGuid, WizardPowerUseSeed, "Wizard school",
+                new[] { WizardSchoolSelectionGuid, WizardSpecialistSchoolSelectionGuid });
             BuildPatronSpellMap();
 
             GlobalBonusExtras = globalExtras;
@@ -2964,6 +3116,178 @@ namespace WOTRFavoredClass
         // derives the same list from the vanilla favored enemy selection instead of
         // enumerating creature types by hand — so third-party favored enemies are
         // covered automatically.
+        // "Select one domain power granted at 1st level that is normally usable a number of times
+        // per day equal to 3 + the caster's ability modifier; add +1/2 to its uses per day."
+        //
+        // Same shape as the favored enemy pick: one reward feature per domain (or school) the
+        // character could have taken, each gated on actually having it, each raising that one
+        // power's own resource. The list is DERIVED from the game rather than hard-coded — there
+        // are dozens of domain resources once Separatist and Greater variants are counted, and a
+        // hand-written list would silently miss domains added by other mods.
+        //
+        // The tabletop wording is the filter: a resource qualifies only if its maximum is
+        // "3 + a stat modifier", which is exactly BaseValue == 3 with IncreasedByStat set. That
+        // excludes the Greater powers (a different pool) and anything level-scaled.
+        private static void BuildPowerUsePickPool(string rewardGuid, string seed, string label, string[] selectionGuids)
+        {
+            var picks = new List<Blueprint<BlueprintFeatureReference>>();
+            var seen = new HashSet<BlueprintGuid>();
+            foreach (var selGuid in selectionGuids)
+            {
+                var sel = ResourcesLibrary.TryGetBlueprint<BlueprintFeatureSelection>(BlueprintGuid.Parse(selGuid));
+                if (sel == null) continue;
+                foreach (var feature in EnumerateSelectableFeatures(sel, new HashSet<BlueprintGuid>(), 0))
+                {
+                    if (!seen.Add(feature.AssetGuid)) continue;
+                    var resource = FindThreePlusStatResource(feature);
+                    if (resource == null) continue;
+
+                    var pickGuid = MergeIds(feature.AssetGuid.ToString(), seed);
+                    FeatureConfigurator.New($"ZFCWPowerUse{feature.name}", pickGuid)
+                        .SetDisplayName(LocalizationTool.CreateString($"ZFCW.PowerUse.{feature.name}.Name",
+                            $"Bonus Uses ({feature.Name})", tagEncyclopediaEntries: false))
+                        .SetDescription(LocalizationTool.CreateString($"ZFCW.PowerUse.{feature.name}.Desc",
+                            "Add one use per day of this power.", tagEncyclopediaEntries: false))
+                        .SetIcon(feature.Icon)
+                        .SetIsClassFeature(true)
+                        .SetRanks(10)
+                        // Only offered for a domain or school the character actually took.
+                        .AddPrerequisiteFeature(feature.AssetGuid.ToString())
+                        .AddComponent<IncreaseResourceAmountPerRank>(c =>
+                            c.m_Resource = resource.ToReference<BlueprintAbilityResourceReference>())
+                        .Configure();
+                    AllModGuids.Add(pickGuid);
+                    AllModBlueprintGuids.Add(BlueprintGuid.Parse(pickGuid));
+                    picks.Add(pickGuid);
+                }
+            }
+
+            FeatureSelectionConfigurator.For(rewardGuid)
+                .AddToAllFeatures(picks.ToArray())
+                .Configure();
+            Main.Log($"{label} power-use pick pool: {picks.Count} powers.");
+
+            // An empty pool is a silent failure in play: the outer card unfolds onto a selection
+            // with nothing in it, so the bonus can be taken once and never again. Rather than
+            // leaving that to be guessed at from the outside, say what was actually inspected.
+            if (picks.Count == 0)
+            {
+                foreach (var selGuid in selectionGuids)
+                {
+                    var sel = ResourcesLibrary.TryGetBlueprint<BlueprintFeatureSelection>(BlueprintGuid.Parse(selGuid));
+                    if (sel == null)
+                    {
+                        Main.Log($"  {label}: selection {selGuid} NOT FOUND.");
+                        continue;
+                    }
+                    var options = EnumerateSelectableFeatures(sel, new HashSet<BlueprintGuid>(), 0).ToList();
+                    Main.Log($"  {label}: '{sel.name}' flattened to {options.Count} options, none with a " +
+                        "3 + stat resource. First few:");
+                    foreach (var o in options.Take(8))
+                    {
+                        Main.Log($"      {o.name} ({o.GetType().Name}), components: " +
+                            string.Join(", ", o.ComponentsArray.Select(c => c.GetType().Name).Take(6)));
+                    }
+                }
+            }
+        }
+
+        // Flattens a selection into the features a character can actually end up with. An option
+        // may itself be a selection — which is why the wizard pool built ZERO entries while the
+        // cleric and druid ones filled up: WizardSchoolSelection offers *kinds* of school, and
+        // the schools themselves sit one level further in. Treating an option as a leaf therefore
+        // found a wrapper with no resource anywhere in its own tree and moved on.
+        private static IEnumerable<BlueprintFeature> EnumerateSelectableFeatures(
+            BlueprintFeature feature, HashSet<BlueprintGuid> visited, int depth)
+        {
+            if (feature == null || depth > 3 || !visited.Add(feature.AssetGuid)) yield break;
+            if (feature is BlueprintFeatureSelection selection && selection.m_AllFeatures != null)
+            {
+                foreach (var childRef in selection.m_AllFeatures)
+                {
+                    foreach (var nested in EnumerateSelectableFeatures(childRef?.Get(), visited, depth + 1))
+                    {
+                        yield return nested;
+                    }
+                }
+                yield break;
+            }
+            yield return feature;
+        }
+
+        // Walks a domain or school for the pool its 1st-level power spends.
+        //
+        // Three different components can name that pool, which is why the first version of this
+        // found 123 cleric domains and 16 druid domains but ZERO wizard schools: it only looked
+        // for AbilityResourceLogic on an ability reached through AddFacts, and the schools do not
+        // advertise themselves that way. AddAbilityResources is the most direct signal — a
+        // feature saying "I grant this pool" — and activatable powers use their own logic
+        // component rather than the ability one.
+        //
+        // The walk is recursive because the nesting depth is not uniform: some powers hang
+        // directly off the domain, others sit a feature or two down. Depth is capped and visited
+        // blueprints are remembered, so a cycle cannot run away.
+        private static BlueprintAbilityResource FindThreePlusStatResource(BlueprintScriptableObject root)
+        {
+            return FindThreePlusStatResource(root, new HashSet<BlueprintGuid>(), 0);
+        }
+
+        private static BlueprintAbilityResource FindThreePlusStatResource(
+            BlueprintScriptableObject bp, HashSet<BlueprintGuid> visited, int depth)
+        {
+            if (bp == null || depth > 4 || !visited.Add(bp.AssetGuid)) return null;
+
+            foreach (var component in bp.ComponentsArray)
+            {
+                BlueprintAbilityResource resource = null;
+                switch (component)
+                {
+                    case Kingmaker.Designers.Mechanics.Facts.AddAbilityResources addRes:
+                        resource = addRes.m_Resource?.Get();
+                        break;
+                    case Kingmaker.UnitLogic.Abilities.Components.AbilityResourceLogic abilityLogic:
+                        resource = abilityLogic.m_RequiredResource?.Get();
+                        break;
+                    case Kingmaker.UnitLogic.ActivatableAbilities.ActivatableAbilityResourceLogic activatable:
+                        resource = activatable.m_RequiredResource?.Get();
+                        break;
+                }
+                if (Is3PlusStat(resource)) return resource;
+
+                if (component is Kingmaker.UnitLogic.FactLogic.AddFacts addFacts && addFacts.m_Facts != null)
+                {
+                    foreach (var factRef in addFacts.m_Facts)
+                    {
+                        var found = FindThreePlusStatResource(factRef?.Get(), visited, depth + 1);
+                        if (found != null) return found;
+                    }
+                }
+            }
+
+            if (bp is BlueprintProgression progression && progression.LevelEntries != null)
+            {
+                foreach (var entry in progression.LevelEntries)
+                {
+                    if (entry?.Features == null) continue;
+                    foreach (var f in entry.Features)
+                    {
+                        var found = FindThreePlusStatResource(f, visited, depth + 1);
+                        if (found != null) return found;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // The tabletop wording is the filter: "normally usable a number of times per day equal to
+        // 3 + the ability modifier". That excludes the Greater powers and anything level-scaled.
+        private static bool Is3PlusStat(BlueprintAbilityResource resource)
+        {
+            if (resource == null) return false;
+            var amount = resource.m_MaxAmount;
+            return amount.BaseValue == 3 && amount.IncreasedByStat;
+        }
+
         private static void BuildFavoredEnemyPickPool()
         {
             var sourceSel = ResourcesLibrary.TryGetBlueprint<BlueprintFeatureSelection>(

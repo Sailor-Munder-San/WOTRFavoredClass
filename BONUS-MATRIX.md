@@ -150,9 +150,6 @@ artifact. Summary by wave:
     features during chargen, exactly when the second choice is due, and this keeps the option
     off every other race without a race prerequisite. Same technique as the original, which
     copies its favored class selection onto the half-elf.
-  - It is deliberately NOT registered in `BonusSelectionGuids`: that set drives the level-up
-    patch that re-anchors a per-class *bonus* card behind its favored class pick, and a second
-    class pick would compete with the bonus card for the same slot.
   - Pets are excluded at the source. An animal companion levels a real character class and
     gets the basic feat progression too, so it was being offered a favored class of its own.
     A prefix on `LevelUpState.AddSelection` drops our selection outright when
@@ -201,10 +198,12 @@ artifact. Summary by wave:
   gained Kitsune. Four Ebon races are newly referenced: Svirfneblin, Samsaran, Changeling, Nagaji.
   - One new component, `IncreaseSpellDescriptorCasterLevelPerRank`. The existing school-based
     component cannot express it: a descriptor like Good is orthogonal to the school.
-  - **Descriptor gap.** WOTR's `SpellDescriptor` has `Curse`, `Evil` and `Good`, but **no**
-    `Chaotic`, `Pain`, `Shadow` or `Darkness`. The Drow sorcerer list is therefore curse-or-evil
-    rather than the tabletop "curse, evil, or pain", and three bonuses that depend on the missing
-    descriptors cannot be built at all — see the deferred table.
+  - **Descriptor gap — partly wrong, corrected below.** This originally read that
+    `SpellDescriptor` has no `Chaotic`, `Pain`, `Shadow` or `Darkness`, and three bonuses were
+    written off on that basis. Only `Pain`, `Shadow` and `Darkness` are genuinely absent. The
+    chaotic one is spelled **`Chaos`**, and searching for "Chaotic" is what missed it — see the
+    Wave 13 note. The Drow sorcerer list is still curse-or-evil rather than the tabletop
+    "curse, evil, or pain", since `Pain` really does not exist.
   - Bomb damage lists ten bomb abilities explicitly. Discovery bombs are separate root abilities
     rather than children of the standard bomb, so a bomb added by another mod would not be
     covered — the same scoping as the kineticist blast lists.
@@ -314,11 +313,17 @@ artifact. Summary by wave:
       somebody else. (An earlier reading of this file claimed no such bridge existed, on the
       strength of `ContextRankBaseValueType` having no caster-feature-rank member. That was
       wrong: the bridge is the context, not the base value type.)
-    - `ContextRankConfig_GetValue_BannerPatch` therefore postfixes `GetValue`, and the counter
-      carries no component at all — it exists only to hold ranks. **Cost**: `GetValue` has exactly
-      one caller, `MechanicsContext.RecalculateRanks`, so ranks are computed when a context is
-      built or refreshed rather than per roll, and the guard is a reference comparison against
-      the config cached at install. The vanilla blueprint is read, never written.
+    - `ContextRankConfig_GetValue_BannerPatch` therefore postfixes `GetValue`. **Cost**:
+      `GetValue` has exactly one caller, `MechanicsContext.RecalculateRanks`, so ranks are
+      computed when a context is built or refreshed rather than per roll, and the guard is a
+      reference comparison against the config cached at install. The vanilla blueprint is read,
+      never written.
+    - It reads the **effect feature's** rank, not the counter's. Built the other way round at
+      first — counter read directly, divided inside the patch — which left it the only divisor
+      entry in the mod with no delivery mechanism and no feature on the character sheet showing
+      what had been earned. It now follows the same split as everything else: the counter holds
+      picks, one rank of the effect is granted at each threshold, and the effect's rank is the
+      bonus. Guarded by check C7.
   - **Shifter minor form (Human ÷3).** The tabletop bonus is minutes per day, and WOTR does not
     track the form in minutes — but it does meter the aspect as a per-day pool.
     `ShifterAspectResource` (`1b096f34…`) reads base 3 plus one per class level, confirming the
@@ -337,6 +342,61 @@ artifact. Summary by wave:
   Existing explicit listings are left alone: several are genuine tabletop entries for the half
   race rather than heritage shorthand, and a redundant listing costs nothing. Guarded by check C5.
 
+- **Wave 13: re-checked the "blocked by the engine" list — one was simply wrong.** The chaotic
+  caster level bonus (Arcanist, Ganzi ÷2) is now implemented. `SpellDescriptor` does carry the
+  value; it is spelled **`Chaos`**, and an earlier pass searched the enum for "Chaotic", found
+  nothing and recorded the bonus as impossible. It needed no new component — the existing
+  `IncreaseSpellDescriptorCasterLevelPerRank` took it unchanged.
+  - Re-checking the whole enum turned up `Ground` as well, which the fidelity notes also claimed
+    was absent. See the Acid Spell Damage entry.
+  - `Pain`, `Shadow` and `Darkness` really are absent, and there is no subschool concept
+    anywhere in the engine — but the shadow spells exist individually, so that family moved from
+    "blocked" to "needs a curated list" rather than staying impossible.
+
+- **Dropped the level-up re-anchoring postfix.** It moved the per-class bonus card inside
+  `LevelUpState.Selections` so it sat directly behind the favored class pick. It never governed
+  where the PICK itself appears — `FeatureGroup.Racial` does that, which is what places it beside
+  the background step at level 1 — so all it bought was tidier ordering of the bonus card on
+  later level-ups.
+  - Against that it reordered `Selections` by removing and re-inserting an entry, while the UI
+    remembers a phase's position in that list (`CharGenFeatureSelectorPhaseVM.IndexInLevelupState`).
+    A phase counts as complete when its selection is answered **or** when nothing is selectable,
+    and the level-up cannot be finished until every phase is complete. A phase pointed at the
+    wrong entry, or an entry left without a phase, is therefore exactly how a pick becomes
+    silently skippable — which is the reported bug where leaving the choice empty loses the
+    increment for good. Cosmetic gain, real risk; removed on the user's call that placement after
+    level 1 does not matter.
+  - `BonusSelectionGuids`/`BonusSelectionAssetGuids` existed only to drive that postfix and are
+    gone with it. The pet-exclusion prefix on the same patch stays — it is load-bearing.
+
+- **The skippable favored class card: fixed with the engine's own flag, not a patch.** Leaving
+  the card empty finished the level-up and lost the increment for good. Two wrong guesses came
+  first — the re-anchoring postfix, then a Harmony postfix forcing the phase incomplete — before
+  the actual mechanism turned up one call deeper.
+  - `FeatureSelectionState.CanSelectAnything` opens with `Selection.IsObligatory()`, and
+    `BlueprintFeatureSelection.IsObligatory()` is nothing but `return Obligatory` — a plain
+    public bool on the blueprint. That is how vanilla marks a selection as one you must answer;
+    there is no separate mechanism, and the level-up phase refuses to report itself complete
+    while an obligatory card is unanswered.
+  - So the fix is `.SetObligatory()` on the per-class bonus card and on the favored class pick.
+    The Harmony patch written before this was found is gone, and the mod is back to 10 patches.
+  - Declining is still possible — "No Favored Class" remains an option on the pick, and the bonus
+    card always offers the universal hit point and skill rank. The choice just has to be made
+    rather than skipped past.
+
+## Engine facts this document relies on
+
+Claims about what the engine does **not** have are the ones that rot silently, and getting one
+wrong costs a bonus that was never actually impossible: `Chaos` was recorded as missing for
+several waves because the search looked for `Chaotic`. So they are asserted here in a form check
+C10 can verify against the live assembly rather than left as prose.
+
+```engine-assert
+SpellDescriptor absent: Pain, Shadow, Darkness
+SpellDescriptor present: Chaos, Ground, Curse, Evil, Good
+type absent: SpellSubSchool
+```
+
 ## Deferred (with reasons)
 
 | Bonus | Reason |
@@ -344,7 +404,7 @@ artifact. Summary by wave:
 | Kineticist internal buffer | The resource does not exist in WOTR (burn was reworked) |
 | Eldritch Scion eldritch pool (÷4) | The resource exists (`EldritchPoolResourse` `17b6158d...`) and would be trivial via `IncreaseResourceAmountPerRank` — but per the user's decision the scion gets only bonus arcana, not the pool |
 | Ravener Hunter / Winter Witch / Unlettered Arcanist — separate archetype variants of bonus known spell (own spellbook instead of the base one) | There is no point making separate FCB entries for the archetypes as such: Ravener Hunter is not present in vanilla WOTR (only in the ExpandedContent mod, unverified), Winter Witch is a prestige class (it does not change the base list), and Unlettered Arcanist is already excluded from the base Arcanist entry instead of getting a variant |
-| Arcanist chaotic-descriptor caster level (Gnome); Wizard shadow/darkness known spell (Fetchling) | WOTR's `SpellDescriptor` has no `Chaotic`, `Shadow` or `Darkness` value. There is nothing to filter on. |
+| Wizard shadow/darkness known spell (Fetchling); Paladin saves vs shadow/darkness (Drow) | **Not blocked — reclassified.** WOTR has no subschool concept at all (`SpellComponent` carries only `School`, and there is no `SpellSubSchool` type), so "illusion (shadow)" cannot be filtered by tag. But the spells themselves exist as blueprints — `ShadowEvocation`, `ShadowConjuration`, both Greater variants and `Shades` — so the subschool is expressible as an explicit five-spell list, exactly how the bomb and kineticist blast lists already work. Needs a curated list plus, for the paladin, a save-bonus component keyed on it. |
 | Rogue sneak attack damage vs outsiders (Tiefling) | `OutsiderType` (`9054d398...`) makes the target check trivial, but our damage component adds to *all* damage against that target, not to sneak attack specifically. Implementing it faithfully needs a hook into the sneak attack damage itself. |
 | Wizard arcane school power uses (Drow, Elf, Gnome, Tiefling) | Each school has its own resource (`DivinationSchoolBaseResource`, `EnchantmentSchoolBaseResource`, …), so "select one school power" needs a per-school track like the Thassilonian wizard, not a single resource entry. |
 | Cleric/Druid domain power uses (6 races) | Same shape: the choice is among the domains the character already took, so it needs the wrapper pattern used by the favored enemy pick. |
@@ -358,8 +418,10 @@ artifact. Summary by wave:
   whatever they were given by the arrangement in force when they were made; the race-anchored
   pick, and the half-elf's second slot, apply to newly created characters only.
 
-- Acid Spell Damage (Dwarf/Oread Sorcerer): ZFC used `Acid | Ground`; the Ground descriptor
-  does not exist in WOTR (it is a CotW custom) — only the Acid component was ported.
+- Acid Spell Damage (Dwarf/Oread Sorcerer): ZFC used `Acid | Ground`; only the Acid half is
+  ported. **The stated reason was wrong** — `SpellDescriptor.Ground` does exist in WOTR, so this
+  is an open gap that can be closed rather than an engine limitation. Left alone for now only
+  because widening a shipped bonus changes existing characters' numbers.
 - The slayer talent wrapper mirrors only the base pool (level 2) out of three.
 - Mutagen natural AC (Dwarf Alchemist) recognises only the vanilla set of mutagen/cognatogen
   buffs (31 GUIDs, including True Mutagen) — a mutagen from a third-party mod will not

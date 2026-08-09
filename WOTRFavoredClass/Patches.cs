@@ -10,10 +10,8 @@ using Kingmaker.UnitLogic.Class.LevelUp.Actions;
 
 namespace WOTRFavoredClass
 {
-    // Nested class sub-selections (arcane bond, school, deity...) are appended to the
-    // level-up queue after the favored-class pick card, separating it from its bonus
-    // card. Re-anchor OUR bonus selection right behind its parent (the favored class
-    // pick) so the two cards always sit together. Vanilla selections are untouched.
+    // Keeps the favored class selection away from pets. Nothing else — see the note below
+    // about the re-anchoring postfix that used to live here.
     [HarmonyPatch(typeof(LevelUpState), nameof(LevelUpState.AddSelection))]
     internal static class LevelUpState_AddSelection_Patch
     {
@@ -34,25 +32,19 @@ namespace WOTRFavoredClass
             return false;
         }
 
-        [HarmonyPostfix]
-        static void Postfix(LevelUpState __instance, FeatureSelectionState parent, IFeatureSelection selection, FeatureSelectionState __result)
-        {
-            if (__result == null) return;
-            if (selection is not BlueprintFeatureSelection bp) return;
-            var guid = bp.AssetGuid;
-            var list = __instance.Selections;
-
-            // The per-class bonus selection is granted by the favored-class progression's
-            // level entry, so the engine passes parent=null. Anchor it behind the favored
-            // class pick card by looking that card up directly; on regular level-ups
-            // (no pick card in queue) it simply stays appended.
-            if (!FavoredClasses.BonusSelectionAssetGuids.Contains(guid)) return;
-            int fcIdx = list.FindIndex(s =>
-                (s.Selection as BlueprintFeatureSelection)?.AssetGuid == FavoredClasses.SelectionAssetGuid);
-            if (fcIdx < 0) return;
-            if (!list.Remove(__result)) return;
-            list.Insert(fcIdx + 1, __result);
-        }
+        // There used to be a postfix here that moved the per-class BONUS card in
+        // LevelUpState.Selections so it sat directly behind the favored class pick. It is gone,
+        // and deliberately so.
+        //
+        // It never controlled where the favored class PICK appears — that comes from
+        // FeatureGroup.Racial, which is what puts it beside the background step at level 1 (see
+        // "A card's position in chargen" in PORT-DESIGN.md). All it did was tidy the bonus card's
+        // position on later level-ups, which is cosmetic.
+        //
+        // Against that it reordered Selections by removing and re-inserting an entry, which is
+        // worth avoiding for its own sake. It was briefly suspected of causing the skippable
+        // card, but that turned out to be something else entirely: the selections simply were
+        // not marked Obligatory. See SetObligatory() in FavoredClasses.Install.
     }
 
     // Save-hygiene gate for the path that actually grants progression and race features.
@@ -106,6 +98,13 @@ namespace WOTRFavoredClass
                 if (!IsOurSelection(features[i])) filtered.Add(features[i]);
             }
             features = filtered;
+
+            if (Diagnostics.Enabled)
+            {
+                Diagnostics.First("gate", "progression:" + (u.Blueprint?.name ?? "?"),
+                    $"progression gate withheld the favored class selection from {Diagnostics.Describe(u)} " +
+                    $"(reason: {(u.IsPet ? "pet" : "not player faction")})");
+            }
         }
 
         static bool IsOurSelection(BlueprintFeatureBase feature)
@@ -209,6 +208,12 @@ namespace WOTRFavoredClass
                 {
                     pickedFact.SetSource((Kingmaker.UnitLogic.FeatureSource)ownerClass, level);
                 }
+                if (Diagnostics.Enabled)
+                {
+                    Diagnostics.First("pick", $"class:{picked.name}:{unit.Unit?.UniqueId}",
+                        $"{Diagnostics.Describe(unit.Unit)} chose favored class '{picked.name}' at character " +
+                        $"level {level}; sourced to {(ownerClass != null ? ownerClass.name : "<CLASS NOT RESOLVED>")}");
+                }
                 return;
             }
 
@@ -219,16 +224,57 @@ namespace WOTRFavoredClass
                 {
                     unit.AddFact<Feature>(counterBp)?.SetSource(source, level);
                 }
+                if (Diagnostics.Enabled)
+                {
+                    Diagnostics.Event("reward", $"{Diagnostics.Describe(unit.Unit)} took reward '{picked.name}'; " +
+                        $"counter '{counterBp?.name ?? "<missing>"}' now rank " +
+                        $"{(counterBp != null ? unit.Progression.Features.GetRank(counterBp) : 0)}");
+                }
                 return;
             }
 
-            if (!FavoredClasses.EffectGrants.TryGetValue(guid, out var grant)) return;
+            if (!FavoredClasses.EffectGrants.TryGetValue(guid, out var grant))
+            {
+                // Only our own blueprints. SelectFeature.Apply fires for EVERY feature selection
+                // in the game, including each feat every NPC picks while auto-levelling, so
+                // logging unconditionally here buried the real lines: a session produced 627
+                // pick lines of which 11 were ours.
+                //
+                // Keyed on rank so a repeat at the same rank collapses into the counter: the
+                // engine calls Apply more than once for a single confirmed pick, which otherwise
+                // reads as the player having taken the bonus several times.
+                if (Diagnostics.Enabled && FavoredClasses.AllModBlueprintGuids.Contains(guid))
+                {
+                    int r = unit.Progression.Features.GetFact(picked)?.GetRank() ?? 0;
+                    Diagnostics.First("pick", $"pick:{picked.name}:{unit.Unit?.UniqueId}:{r}",
+                        $"{Diagnostics.Describe(unit.Unit)} took '{picked.name}', now rank {r} — " +
+                        "no effect feature bound to this blueprint (its effect rides the blueprint " +
+                        "itself, or it is a wrapper's outer card or progress counter)");
+                }
+                return;
+            }
             int rank = unit.Progression.Features.GetFact(picked)?.GetRank() ?? 0;
-            if (rank <= 0 || rank % grant.Divisor != 0) return;
+            if (rank <= 0 || rank % grant.Divisor != 0)
+            {
+                if (Diagnostics.Enabled)
+                {
+                    Diagnostics.First("pick", $"pick:{picked.name}:{unit.Unit?.UniqueId}:{rank}",
+                        $"{Diagnostics.Describe(unit.Unit)} took '{picked.name}', now rank {rank} of " +
+                        $"{grant.Divisor} toward the next increment — no effect granted yet, as expected");
+                }
+                return;
+            }
             var effectBp = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(grant.EffectGuid);
             if (effectBp != null)
             {
                 unit.AddFact<Feature>(effectBp)?.SetSource(source, level);
+            }
+            if (Diagnostics.Enabled)
+            {
+                Diagnostics.First("effect", $"effect:{picked.name}:{unit.Unit?.UniqueId}:{rank}",
+                    $"{Diagnostics.Describe(unit.Unit)} bonus '{picked.name}' reached rank " +
+                    $"{rank} (divisor {grant.Divisor}) — granted effect '{effectBp?.name ?? "<MISSING BLUEPRINT>"}', " +
+                    $"now rank {(effectBp != null ? unit.Progression.Features.GetRank(effectBp) : 0)}");
             }
         }
     }
@@ -370,11 +416,24 @@ namespace WOTRFavoredClass
 
             var caster = context?.MaybeCaster;
             if (caster == null) return;
-            var counter = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(FavoredClasses.BannerBonusCounterGuid);
-            if (counter == null) return;
-            int rank = caster.Descriptor?.Progression?.Features?.GetRank(counter) ?? 0;
-            if (rank <= 0) return;
-            __result += rank / 4;
+            // The EFFECT feature, not the counter: one rank of it is granted at each divisor
+            // threshold, so its rank is already the earned bonus and no division happens here.
+            // Same division-of-labour as every other divisor entry.
+            var effect = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(FavoredClasses.BannerBonusEffectGuid);
+            if (effect == null) return;
+            int earned = caster.Descriptor?.Progression?.Features?.GetRank(effect) ?? 0;
+            if (earned <= 0)
+            {
+                if (Diagnostics.Enabled) Diagnostics.Tally("banner: rank config hit, caster has no earned bonus");
+                return;
+            }
+            __result += earned;
+            if (Diagnostics.Enabled)
+            {
+                Diagnostics.First("banner", "banner:" + caster.UniqueId,
+                    $"banner bonus raised for {Diagnostics.Describe(caster)}: base {__result - earned} + {earned} = {__result}");
+                Diagnostics.Tally("banner: bonus applied");
+            }
         }
     }
 

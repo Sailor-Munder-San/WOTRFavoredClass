@@ -169,6 +169,17 @@ namespace WOTRFavoredClass
             {
                 evt.AddTemporaryModifier(
                     evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
+                if (Diagnostics.Enabled)
+                {
+                    Diagnostics.Tally(OnlyAttackOfOpportunity
+                        ? "challenge: +damage on attack of opportunity"
+                        : "challenge: +damage vs challenged target");
+                    if (Diagnostics.VerboseHotPaths)
+                    {
+                        Diagnostics.Log("challenge", $"{Diagnostics.Describe(Owner)} +{bonus} damage vs " +
+                            $"{Diagnostics.Describe(evt.Target)}{(OnlyAttackOfOpportunity ? " (AoO)" : "")}");
+                    }
+                }
             }
         }
 
@@ -229,6 +240,14 @@ namespace WOTRFavoredClass
 
             evt.AddTemporaryModifier(
                 evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
+            if (Diagnostics.Enabled)
+            {
+                Diagnostics.Tally("claws: +damage on a claw attack with the modal active");
+                if (Diagnostics.VerboseHotPaths)
+                {
+                    Diagnostics.Log("claws", $"{Diagnostics.Describe(Owner)} +{bonus} claw damage vs {Diagnostics.Describe(evt.Target)}");
+                }
+            }
         }
 
         public void OnEventDidTrigger(RuleAttackWithWeapon evt) { }
@@ -256,6 +275,15 @@ namespace WOTRFavoredClass
             if (attacker == null) return;
             if (attacker.State.Size < MinimumSize) return;
             evt.AddModifier(bonus, Fact, ModifierDescriptor.Dodge);
+            if (Diagnostics.Enabled)
+            {
+                Diagnostics.Tally("defensive instinct: +AC vs a larger creature");
+                if (Diagnostics.VerboseHotPaths)
+                {
+                    Diagnostics.Log("instinct", $"{Diagnostics.Describe(Owner)} +{bonus} dodge AC vs " +
+                        $"{Diagnostics.Describe(attacker)} (size {attacker.State.Size})");
+                }
+            }
         }
 
         public void OnEventDidTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt) { }
@@ -355,9 +383,6 @@ namespace WOTRFavoredClass
             if (actualRace == HalfOrc) return listedRace == Human || listedRace == Orc;
             return false;
         }
-
-        // True for a race that reaches bonuses beyond its own, so the tooltip can say so.
-        internal static bool IsDualHeritage(BlueprintGuid race) => race == HalfElf || race == HalfOrc;
     }
 
     // Race gate for racial favored class bonuses (WOTR has no vanilla race prerequisite).
@@ -384,14 +409,7 @@ namespace WOTRFavoredClass
 
         public override string GetUITextInternal(UnitDescriptor unit)
         {
-            var text = "Race: " + string.Join(" or ", m_Races.Select(r => r.Get()?.Name ?? "?"));
-            // Otherwise a half-orc offered an orc bonus reads "Race: Orc" and looks like a bug.
-            var race = unit?.Progression?.Race;
-            if (race != null && RaceHeritage.IsDualHeritage(race.AssetGuid))
-            {
-                text += $" (a {race.Name} counts as both parent races)";
-            }
-            return text;
+            return "Race: " + string.Join(" or ", m_Races.Select(r => r.Get()?.Name ?? "?"));
         }
     }
 
@@ -907,6 +925,14 @@ namespace WOTRFavoredClass
             if (bp == null || pet.Descriptor.HasFact(bp)) return;
             var source = (FeatureSource)BlueprintCore.Utils.BlueprintTool.Get<BlueprintProgression>(FavoredClasses.SourceMarkerGuid);
             pet.Descriptor.AddFact<Feature>(bp)?.SetSource(source, 1);
+            // Guarded, not left to Event's own early return: the interpolation would otherwise
+            // run and allocate before the call, even with diagnostics off.
+            if (Diagnostics.Enabled)
+            {
+                Diagnostics.Event("pet", $"granted '{bp.name}' to {Diagnostics.Describe(pet)} " +
+                    $"(master {Diagnostics.Describe(Owner)}, counter rank " +
+                    $"{Owner.Progression.Features.GetRank(Fact.Blueprint as BlueprintFeature)})");
+            }
         }
 
         void TryRevoke(UnitEntityData pet)
