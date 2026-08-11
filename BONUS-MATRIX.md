@@ -32,7 +32,7 @@ had no entries in ZFC — bonuses for them would be homebrew, so they are out of
 | Swashbuckler | `338abf2723c14c1ab0f17cd7e3020444` | Swashbuckler mod (panache `ac63bfcf...`, charmed life `e6ad4ad4...`) |
 | Antipaladin | `8939eff25a0a4b77ad1ab6be4c760a6c` | MicroscopicContentExpansion (cruelty selection `402fccae...` from its Blueprints.json) |
 
-## Porting status (current as of Wave 8)
+## Porting status (current as of Wave 14)
 
 The full ledger of the original's 91 bonuses is the published "Favored Class Bonus Ledger"
 artifact. Summary by wave:
@@ -313,7 +313,7 @@ artifact. Summary by wave:
       somebody else. (An earlier reading of this file claimed no such bridge existed, on the
       strength of `ContextRankBaseValueType` having no caster-feature-rank member. That was
       wrong: the bridge is the context, not the base value type.)
-    - `ContextRankConfig_GetValue_BannerPatch` therefore postfixes `GetValue`. **Cost**:
+    - `ContextRankConfig_GetValue_RaisePatch` therefore postfixes `GetValue`. **Cost**:
       `GetValue` has exactly one caller, `MechanicsContext.RecalculateRanks`, so ranks are
       computed when a context is built or refreshed rather than per roll, and the guard is a
       reference comparison against the config cached at install. The vanilla blueprint is read,
@@ -328,7 +328,7 @@ artifact. Summary by wave:
     track the form in minutes — but it does meter the aspect as a per-day pool.
     `ShifterAspectResource` (`1b096f34…`) reads base 3 plus one per class level, confirming the
     minor form is resource-limited rather than an at-will toggle, so the bonus carries over onto
-    the existing `IncreaseResourceAmountPerRank` as uses instead of minutes. Same pool and same
+    the existing resource-amount component as uses instead of minutes. Same pool and same
     effect in play; only the unit differs, and it is the game's unit rather than the book's.
 
 - **Dual heritage moved out of the data and into the gate.** A half-race reaches its own bonuses
@@ -341,6 +341,64 @@ artifact. Summary by wave:
   `PrerequisiteRaceAny`, so entry data names the race the tabletop names and no entry can omit it.
   Existing explicit listings are left alone: several are genuine tabletop entries for the half
   race rather than heritage shorthand, and a redundant listing costs nothing. Guarded by check C5.
+
+- **Wave 12: domain and school power uses — 8 tabletop pairs closed by one mechanism.** Cleric
+  (Dwarf, Elf, Halfling, Half-Orc), druid (Dwarf) and wizard (Drow, Elf, Gnome) all read the same
+  in the book: "choose one power usable 3 + ability modifier times per day, +1/2 use". Three defs
+  cover all eight, each a counter plus a reward selection built by `BuildPowerUsePickPool`.
+  - The pool is **discovered at runtime**, not hardcoded: walk every selection through which the
+    class can end up holding a domain or school — then filter their options for
+    `AddAbilityResources` / `AbilityResourceLogic` / `ActivatableAbilityResourceLogic` whose
+    resource has the right SHAPE: a small fixed base plus a stat modifier, with no level scaling.
+    That is the "3 + modifier" the text describes, and it means a domain added by another mod is
+    offered without a code change.
+  - **The base is 3 for an ordinary caster and 2 for the separatist cleric**, whose domain powers
+    run one cleric level lower — Owlcat wrote that into the resource itself
+    (`AirDomainBaseResourceSeparatist` is 2 + Wisdom) rather than into a modifier. Requiring
+    exactly 3 rejected 73 of the separatist's 75 domains while accepting the two that share a
+    resource with the standard line, so the archetype had a reward card that never listed the
+    domain it had actually taken. Reported from play twice: the first fix added the missing
+    selection, which was necessary and not sufficient — the second read the rejected resource's
+    actual amount out of the log instead of guessing at it.
+  - `WizardSchoolSelection` is deliberately **not** in the wizard list: despite the name it holds
+    the OPPOSITION schools (`AddOppositionSchool`), which grant no powers. The real schools come
+    from `SpecialistSchoolSelection` and `ThassilonianSchoolSelection`.
+  - **A selection's option can itself be a selection** — that is what made the wizard pool come
+    out empty on the first attempt. `EnumerateSelectableFeatures` flattens recursively (depth ≤3),
+    and `FindThreePlusStatResource` walks nested components (depth ≤4).
+  - **An archetype that swaps the choice out for its own is a separate selection**, and its
+    domains are separate blueprints with separate resources. The separatist cleric's second
+    domain (`SecondDomainsSeparatistSelection`) was missing for two versions and reported from
+    play; the Thassilonian wizard's school selection had the same gap and was found with it.
+    Listing a selection whose options are the ordinary ones costs nothing — the pool dedupes by
+    feature — so the list errs towards including one.
+  - An empty pool is logged rather than silently producing a card with nothing on it; check C9
+    fails the build for it. The log now reports the count **per selection**, because a total
+    alone hides exactly this failure: the card still opens, it just never offers that
+    character's own domain. This matters more here than elsewhere, since the pool depends on
+    another blueprint's shape rather than on our own data.
+  - Each class has its own seed, so the generated per-power features never collide across classes.
+
+- **Wave 14: the pointwise tabletop lines — 8 entries, 11 race/class pairs.** Bloodrager/Halfling
+  (dodge vs larger while bloodraging), Alchemist/Dhampir (mutagen duration), Cleric/Human+Tiefling
+  (spell penetration vs outsiders), Fighter/Kitsune (damage vs flanked), Paladin/Nagaji (divine
+  bond duration), Paladin/Fetchling+Oread (aura bonus), Rogue/Goblin (sneak before the target
+  acts), Warpriest/Halfling (sacred weapon level). Witch/Changeling+Orc needed no entry at all —
+  "add a spell to the familiar" is a bonus known spell in a game where familiars are not
+  controllable, so those two races joined the existing witch entry.
+  - **Everything here was settled by reading live blueprints**, not by decompiling. A read-only
+    blueprint inspector was written for it (`BlueprintProbe.cs`, since removed with the rest of
+    the mod's tooling — restore it from git history when the next such question arrives). See the
+    engine-trap entry in `PORT-DESIGN.md`.
+  - Two lines read "+1" in the book, which as a favored class bonus reaches +20 and dwarfs every
+    comparable entry. Halved on the user's decision: Cleric/Human+Tiefling and Rogue/Goblin are
+    ÷2. Every other divisor is the book's own.
+  - The paladin aura is the mod's **only** write to a vanilla blueprint, under the three
+    conditions in `PORT-DESIGN.md` and guarded by check C11.
+  - Arcanist/Dwarf (arcane barrier level) is **not** here: WOTR has only the Arcane Barrier
+    exploit, there is no arcanist arcane weapon exploit at all (the `ArcaneWeapon*` blueprints are
+    the magus enhancement line), so the line cannot be ported whole. Deferred by the user's
+    decision, as a candidate for the Build Options mod instead.
 
 - **Wave 13: re-checked the "blocked by the engine" list — one was simply wrong.** The chaotic
   caster level bonus (Arcanist, Ganzi ÷2) is now implemented. `SpellDescriptor` does carry the
@@ -402,12 +460,11 @@ type absent: SpellSubSchool
 | Bonus | Reason |
 |---|---|
 | Kineticist internal buffer | The resource does not exist in WOTR (burn was reworked) |
-| Eldritch Scion eldritch pool (÷4) | The resource exists (`EldritchPoolResourse` `17b6158d...`) and would be trivial via `IncreaseResourceAmountPerRank` — but per the user's decision the scion gets only bonus arcana, not the pool |
+| Eldritch Scion eldritch pool (÷4) | The resource exists (`EldritchPoolResourse` `17b6158d...`) and would be trivial via the vanilla `IncreaseResourceAmount` — but per the user's decision the scion gets only bonus arcana, not the pool |
 | Ravener Hunter / Winter Witch / Unlettered Arcanist — separate archetype variants of bonus known spell (own spellbook instead of the base one) | There is no point making separate FCB entries for the archetypes as such: Ravener Hunter is not present in vanilla WOTR (only in the ExpandedContent mod, unverified), Winter Witch is a prestige class (it does not change the base list), and Unlettered Arcanist is already excluded from the base Arcanist entry instead of getting a variant |
 | Wizard shadow/darkness known spell (Fetchling); Paladin saves vs shadow/darkness (Drow) | **Not blocked — reclassified.** WOTR has no subschool concept at all (`SpellComponent` carries only `School`, and there is no `SpellSubSchool` type), so "illusion (shadow)" cannot be filtered by tag. But the spells themselves exist as blueprints — `ShadowEvocation`, `ShadowConjuration`, both Greater variants and `Shades` — so the subschool is expressible as an explicit five-spell list, exactly how the bomb and kineticist blast lists already work. Needs a curated list plus, for the paladin, a save-bonus component keyed on it. |
 | Rogue sneak attack damage vs outsiders (Tiefling) | `OutsiderType` (`9054d398...`) makes the target check trivial, but our damage component adds to *all* damage against that target, not to sneak attack specifically. Implementing it faithfully needs a hook into the sneak attack damage itself. |
-| Wizard arcane school power uses (Drow, Elf, Gnome, Tiefling) | Each school has its own resource (`DivinationSchoolBaseResource`, `EnchantmentSchoolBaseResource`, …), so "select one school power" needs a per-school track like the Thassilonian wizard, not a single resource entry. |
-| Cleric/Druid domain power uses (6 races) | Same shape: the choice is among the domains the character already took, so it needs the wrapper pattern used by the favored enemy pick. |
+| Arcanist arcane barrier / arcane weapon level (Dwarf) | Half the line cannot exist: WOTR has the Arcane Barrier exploit but no arcanist arcane weapon exploit (`ArcaneWeapon*` is the magus enhancement line). Deferred by the user's decision as a candidate for the Build Options mod. |
 | Insinuator Greed | The archetype is absent from MCE |
 | Psychic/Occultist/Investigator/Spiritualist/Summoner — everything | The classes are absent from WOTR and the installed mods |
 

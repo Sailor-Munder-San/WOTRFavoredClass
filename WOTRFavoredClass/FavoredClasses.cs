@@ -352,9 +352,22 @@ namespace WOTRFavoredClass
 
         private const string ClericDomainsSelectionGuid = "48525e5da45c9c243a343fc6545dbdb9";
         private const string ClericSecondDomainsSelectionGuid = "43281c3d7fe18cc4d91928395837cd1e";
+        // The separatist replaces the SECOND domain with one taken from a deity other than his
+        // own, through a selection of its own — and every domain it offers is a separate
+        // blueprint with its own resource (AirDomainBaseResourceSeparatist and so on), because
+        // the archetype runs those powers at one level lower. Reading only the two standard
+        // selections therefore left a separatist's second domain out of the pool entirely.
+        private const string ClericSeparatistSecondDomainsSelectionGuid = "42b781e4375d499383b2602d90661283";
+        // The Extra Domain feat. Its options are the ordinary domain features, so this usually
+        // adds nothing (the pool dedupes by feature); it is listed so that a domain reachable
+        // ONLY through the feat is not missed.
+        private const string ExtraDomainSelectionGuid = "213a8480d22206b45acbfa0619ca5aaf";
         private const string DruidDomainSelectionGuid = "5edfe84c93823d04f8c40ca2b4e0f039";
         private const string WizardSchoolSelectionGuid = "8d4637639441f1041bee496f20af7fa3";
         private const string WizardSpecialistSchoolSelectionGuid = "5f838049069f1ac4d804ce0862ab5110";
+        // Same shape as the separatist, on the wizard side: the Thassilonian specialist picks his
+        // school from a selection of his own rather than from the standard specialist card.
+        private const string WizardThassilonianSchoolSelectionGuid = "f431178ec0e2b4946a34ab504bb46285";
         private const string VanillaFavoriteEnemySel = "16cc2c937ea8d714193017780e7d4fc6";
         private const string InstantEnemyBuffGuid = "82574f7d14a28e64fab8867fbaa17715";
 
@@ -409,6 +422,24 @@ namespace WOTRFavoredClass
             "3fb9e9a6408589343bc8bfc3fd1610e5", // TrueMutagenBuff
         };
 
+        // The buff that carries the paladin's divine bond with her weapon, and therefore its
+        // duration. DivineHunter is the archetype variant of the same bond.
+        private static readonly string[] WeaponBondDurationBuffGuids =
+        {
+            "bf570774501886f47b395a4bfe75eeb2", // WeaponBondDurationBuff
+            "30b2f6ad2bcfa2045948fc9ec7f572b5", // DivineHunterBondDurationBuff
+        };
+
+        // The bloodrager's rage. The bloodline buffs are separate and ride on top of this one,
+        // so the base buff alone answers "is this character bloodraging right now".
+        private static readonly string[] BloodrageBuffGuids =
+        {
+            "5eac31e457999334b98f98b60fc73b2f", // BloodragerStandartRageBuff
+        };
+
+        // Creature types in WOTR are features on the unit rather than an enum on the blueprint.
+        private const string OutsiderTypeFeatureGuid = "9054d3988d491d944ac144e27b6bc318";
+
         // Eldritch Scion is an ARCHETYPE of Magus in WOTR (the same-named character
         // class blueprint is the hidden spellbook helper, excluded from favored
         // classes). Its arcana pool is a separate, Charisma-based selection, so the
@@ -418,7 +449,6 @@ namespace WOTRFavoredClass
         private const string EldritchScionArchetypeGuid = "d078b2ef073f2814c9e338a789d97b73";
         private const string VanillaEldritchMagusArcanaSel = "d4b54d9db4932454ab2899f931c2042c";
         private const string EldritchArcanaRewardGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1baf";
-
 
         // Ability resources (Wave 3 — resource-pool favored class bonuses).
         private const string RageResourceGuid = "24353fcf8096ea54684a72bf58dedbc9";
@@ -475,7 +505,6 @@ namespace WOTRFavoredClass
         // fires exactly once, during chargen. Holds the favored class selection.
         private const string BasicFeatsProgressionGuid = "5b72dd2ca2cb73b49903806ee8986325";
 
-
         // Guids of all per-class bonus selections — used by the level-up queue patch
         // to glue each bonus card right behind its favored-class pick card.
         // BlueprintGuid twins of the identifiers the runtime patches compare against. Comparing
@@ -492,12 +521,23 @@ namespace WOTRFavoredClass
         // (the player-faction gate runs on every fact grant in the game).
         internal static readonly HashSet<BlueprintGuid> AllModBlueprintGuids = new();
 
-        // The cavalier banner's own scaling knob. Both of the banner buff's effects
-        // (SavingThrowBonusAgainstDescriptor and ChargeAttackBonus) take their magnitude from
-        // this one ContextRankConfig, so raising what it returns raises the banner bonus itself
-        // — which is literally what "+1/4 to the cavalier's banner bonus" asks for. Holding the
-        // instances lets the patch identify them with a reference comparison and nothing more.
-        internal static readonly List<Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig> BannerRankConfigs = new();
+        // Vanilla scaling knobs the mod raises rather than duplicates. Each entry pairs a
+        // ContextRankConfig instance from a vanilla blueprint with the effect feature whose rank
+        // gets added to it, so ContextRankConfig_GetValue_RaisePatch identifies its targets with
+        // a reference comparison and nothing more. Nothing is written to those blueprints.
+        internal sealed class RaisedRankConfig
+        {
+            public Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig Config;
+            public string EffectGuid;
+            public string Label;   // diagnostics only
+        }
+
+        internal static readonly List<RaisedRankConfig> RaisedRankConfigs = new();
+
+        // Both of the banner buff's effects (SavingThrowBonusAgainstDescriptor and
+        // ChargeAttackBonus) take their magnitude from one ContextRankConfig, so raising what it
+        // returns raises the banner bonus itself — literally what "+1/4 to the cavalier's banner
+        // bonus" asks for.
         internal const string BannerBonusCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf3";
 
         // The banner bonus follows the same shape as every other divisor entry: the counter
@@ -506,6 +546,23 @@ namespace WOTRFavoredClass
         // itself — which keeps the arithmetic in one place and, more importantly, gives the
         // player a feature on the character sheet showing what the banner actually gained.
         internal const string BannerBonusEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf4";
+
+        // Warpriest sacred weapon: same arrangement, a different vanilla knob. The damage tier is
+        // chosen by a Conditional on WarpriestSacredWeaponBuffBase reading a shared value that
+        // comes from that buff's ClassLevel ContextRankConfig, so raising the rank makes the
+        // game's own conditional apply the higher tier buff.
+        internal const string SacredWeaponLevelCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1c01";
+        internal const string SacredWeaponLevelEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1c02";
+        private const string WarpriestSacredWeaponBuffBaseGuid = "2d133dca34668ef4e98805cb428edebe";
+
+        // Paladin auras. The bonus lives on the effect buff the aura puts on allies, as
+        // SavingThrowBonusAgainstDescriptor with ModifierDescriptor.Morale and a flat Value of 4.
+        // There is no ContextRankConfig to raise, but the component's second slot — the Bonus
+        // ContextValue — is unused, so the mod supplies one. See PatchPaladinAuras.
+        internal const string AuraBonusCounterGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1c03";
+        internal const string AuraBonusEffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1c04";
+        private const string AuraOfCourageEffectBuffGuid = "1044ac71f6200f84bbfbcfa2bcb3bd66";
+        private const string AuraOfResolveEffectBuffGuid = "d8f2f84899d6e1e4d83859e18f697ae3";
 
         internal enum BonusDisplayKind { Flat, Feet, SkillRanks, Feats, HitPoints }
 
@@ -635,13 +692,13 @@ namespace WOTRFavoredClass
 
         public static void Install()
         {
-            // Every registry is reset together, not just the guid list. BannerRankConfigs is the
+            // Every registry is reset together, not just the guid list. RaisedRankConfigs is the
             // one that actually matters: it holds references to component instances belonging to
-            // a vanilla blueprint, so a second Install after the blueprints were reloaded would
+            // vanilla blueprints, so a second Install after the blueprints were reloaded would
             // otherwise leave stale objects in the list alongside the live ones.
             AllModGuids.Clear();
             AllModBlueprintGuids.Clear();
-            BannerRankConfigs.Clear();
+            RaisedRankConfigs.Clear();
             AllModGuids.Add(SelectionGuid);
             AllModGuids.Add(HpFeatureGuid);
             AllModGuids.Add(SkillFeatureGuid);
@@ -913,32 +970,107 @@ namespace WOTRFavoredClass
             // for old-save compatibility).
             BonusDisplays[BlueprintGuid.Parse("3a1b6cf1d0f34d5e9b7a2c8e4f6a1b55")] = (4, BonusDisplayKind.Flat);
 
-            CacheBannerRankConfigs();
+            CacheRaisedRankConfigs();
+            PatchPaladinAuras();
 
             Main.Log($"Favored class system installed: {progressionGuids.Count} class progressions, selection attached to {attached} basic-feat L1 entry (expected 1).");
         }
 
-        // Finds the rank config each banner buff scales from, so the patch can recognise it by
-        // reference. Nothing is written to the vanilla blueprint — the components stay exactly as
-        // the game shipped them, and a cavalier without the bonus is unaffected because the patch
-        // exits on a zero counter rank.
-        private static void CacheBannerRankConfigs()
+        // Finds the rank configs the mod raises, so the patch can recognise them by reference.
+        // Nothing is written to these blueprints — the components stay exactly as the game
+        // shipped them, and a character without the bonus is unaffected because the patch exits
+        // on a zero effect rank.
+        private static void CacheRaisedRankConfigs()
         {
-            foreach (var guid in new[] { CavalierBannerBuffGuid, CavalierBannerGreaterBuffGuid })
+            void Collect(string buffGuid, string effectGuid, string label)
             {
                 var buff = ResourcesLibrary.TryGetBlueprint<Kingmaker.UnitLogic.Buffs.Blueprints.BlueprintBuff>(
-                    BlueprintGuid.Parse(guid));
-                if (buff == null) continue;
+                    BlueprintGuid.Parse(buffGuid));
+                if (buff == null) return;
                 foreach (var component in buff.ComponentsArray)
                 {
                     if (component is Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig config
                         && config.Type == Kingmaker.Enums.AbilityRankType.Default)
                     {
-                        BannerRankConfigs.Add(config);
+                        RaisedRankConfigs.Add(new RaisedRankConfig
+                        {
+                            Config = config,
+                            EffectGuid = effectGuid,
+                            Label = label,
+                        });
                     }
                 }
             }
-            Main.Log($"Cavalier banner rank configs cached: {BannerRankConfigs.Count} (expected 1).");
+
+            Collect(CavalierBannerBuffGuid, BannerBonusEffectGuid, "banner");
+            Collect(CavalierBannerGreaterBuffGuid, BannerBonusEffectGuid, "banner");
+            Collect(WarpriestSacredWeaponBuffBaseGuid, SacredWeaponLevelEffectGuid, "sacred weapon");
+
+            Main.Log($"Vanilla rank configs raised by this mod: {RaisedRankConfigs.Count} (expected 2 — banner, sacred weapon).");
+        }
+
+        // The one place the mod writes to a vanilla blueprint.
+        //
+        // "Add +1/4 to the bonus the paladin grants her allies with her aura of courage and aura
+        // of resolve." The bonus sits on the effect buff the aura applies to allies, as
+        // SavingThrowBonusAgainstDescriptor with ModifierDescriptor.Morale and Value = 4. Adding a
+        // second component beside it would not do: morale bonuses of the same descriptor do not
+        // stack, and an untyped one alongside would be a different bonus rather than a bigger
+        // aura. There is also no ContextRankConfig here to raise the way the banner's is.
+        //
+        // What the component does have is a second, unused slot: it computes
+        // Bonus.Calculate(Fact.MaybeContext) + Value * Fact.GetRank(), and Bonus is an empty
+        // ContextValue. So the mod points Bonus at a rank and supplies the ContextRankConfig that
+        // defines it. The vanilla component then emits 4 + earned, with its own Morale descriptor
+        // — one bonus, simply larger.
+        //
+        // Safe for characters without the bonus: the rank config counts ranks of a feature they
+        // do not have, so it yields 0 and the aura stays at 4. Safe for saves: both components
+        // added here are vanilla types, so no mod $type is written. Safe on uninstall: blueprints
+        // are rebuilt from the game's pack every launch, so the edit simply stops happening.
+        private static void PatchPaladinAuras()
+        {
+            int patched = 0;
+            foreach (var buffGuid in new[] { AuraOfCourageEffectBuffGuid, AuraOfResolveEffectBuffGuid })
+            {
+                var buff = ResourcesLibrary.TryGetBlueprint<Kingmaker.UnitLogic.Buffs.Blueprints.BlueprintBuff>(
+                    BlueprintGuid.Parse(buffGuid));
+                if (buff == null)
+                {
+                    Main.Log($"WARNING: paladin aura buff {buffGuid} not found; the aura bonus will not apply.");
+                    continue;
+                }
+
+                var save = buff.ComponentsArray
+                    .OfType<Kingmaker.Designers.Mechanics.Facts.SavingThrowBonusAgainstDescriptor>()
+                    .FirstOrDefault();
+                if (save == null)
+                {
+                    Main.Log($"WARNING: {buff.name} has no SavingThrowBonusAgainstDescriptor; the aura bonus will not apply.");
+                    continue;
+                }
+
+                // Guard against a second install pass re-adding the rank config.
+                if (save.Bonus != null
+                    && save.Bonus.ValueType == Kingmaker.UnitLogic.Mechanics.ContextValueType.Rank)
+                {
+                    patched++;
+                    continue;
+                }
+
+                var rank = new Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig();
+                rank.m_Type = Kingmaker.Enums.AbilityRankType.Default;
+                rank.m_BaseValueType = Kingmaker.UnitLogic.Mechanics.Components.ContextRankBaseValueType.FeatureRank;
+                rank.m_Feature = BlueprintTool.GetRef<BlueprintFeatureReference>(AuraBonusEffectGuid);
+                rank.m_Progression = Kingmaker.UnitLogic.Mechanics.Components.ContextRankProgression.AsIs;
+                rank.m_UseMax = true;
+                rank.m_Max = 5;
+
+                buff.ComponentsArray = buff.ComponentsArray.Append(rank).ToArray();
+                save.Bonus = ContextValues.Rank();
+                patched++;
+            }
+            Main.Log($"Paladin aura buffs wired for the aura bonus: {patched} (expected 2).");
         }
 
         private sealed class RacialBonusDef
@@ -1126,7 +1258,7 @@ namespace WOTRFavoredClass
                     Key = "BombsEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b26", Ranks = 20,
                     DisplayName = "Bonus Bombs",
                     Description = "+1 bomb per day per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(AlchemistBombsResourceGuid)),
                 },
                 new()
@@ -1134,7 +1266,7 @@ namespace WOTRFavoredClass
                     Key = "KiPoolEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b28", Ranks = 20,
                     DisplayName = "Bonus Ki Pool",
                     Description = "+1 ki point per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(KiPowerResourceGuid)),
                 },
                 new()
@@ -1142,7 +1274,7 @@ namespace WOTRFavoredClass
                     Key = "ArcanePoolEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b2a", Ranks = 20,
                     DisplayName = "Bonus Arcane Pool",
                     Description = "+1 arcane pool point per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(ArcanePoolResourceGuid)),
                 },
                 new()
@@ -1256,7 +1388,7 @@ namespace WOTRFavoredClass
                     Key = "PanacheEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b61", Ranks = 5,
                     DisplayName = "Bonus Panache",
                     Description = "+1 panache point per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(PanacheResourceGuid)),
                 },
                 new()
@@ -1264,7 +1396,7 @@ namespace WOTRFavoredClass
                     Key = "CharmedLifeEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b63", Ranks = 5,
                     DisplayName = "Bonus Charmed Life",
                     Description = "+1 use per day of charmed life per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(CharmedLifeResourceGuid)),
                 },
                 new()
@@ -1281,7 +1413,7 @@ namespace WOTRFavoredClass
                     Key = "BlessingEffect", Guid = BlessingEffectGuid, Ranks = 7,
                     DisplayName = "Bonus Blessings",
                     Description = "+1 use per day of the warpriest's blessings per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(BlessingResourceGuid)),
                 },
                 new()
@@ -1319,9 +1451,86 @@ namespace WOTRFavoredClass
                     DisplayName = "Banner Bonus",
                     Description = "+1 to the cavalier's banner bonus per rank.",
                     // No component: the banner's own ContextRankConfig is what carries the bonus,
-                    // and ContextRankConfig_GetValue_BannerPatch adds this feature's rank to it.
+                    // and ContextRankConfig_GetValue_RaisePatch adds this feature's rank to it.
                     // The feature earns its place by making the bonus visible on the sheet, the
                     // same as every other divisor entry's effect.
+                },
+                new()
+                {
+                    Key = "SacredWeaponLevelEffect", Guid = SacredWeaponLevelEffectGuid, Ranks = 5,
+                    DisplayName = "Sacred Weapon Damage Level",
+                    Description = "+1 to the warpriest's effective level for sacred weapon damage per rank.",
+                    // Same arrangement as the banner: no component here, the rank is added to the
+                    // vanilla ContextRankConfig that chooses the damage tier.
+                },
+                new()
+                {
+                    Key = "AuraBonusEffect", Guid = AuraBonusEffectGuid, Ranks = 5,
+                    DisplayName = "Aura of Courage and Resolve Bonus",
+                    Description = "+1 to the bonus the paladin's aura of courage and aura of resolve grant her allies, per rank.",
+                    // No component: PatchPaladinAuras points the vanilla component's unused Bonus
+                    // slot at a rank config counting ranks of this feature.
+                },
+                new()
+                {
+                    Key = "BloodrageDodgeEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfb", Ranks = 5,
+                    DisplayName = "Dodge Bonus Against Large Creatures While Bloodraging",
+                    Description = "+1 dodge bonus to Armor Class per rank against creatures of size Large or larger, while bloodraging.",
+                    Components = f => f.AddComponent<ACBonusAgainstLargerCreaturesPerRank>(c =>
+                    {
+                        c.MinimumSize = Kingmaker.Enums.Size.Large;
+                        c.m_RequiredOwnerBuffs = BloodrageBuffGuids
+                            .Select(g => BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(g))
+                            .ToArray();
+                    }),
+                },
+                new()
+                {
+                    Key = "FlankedDamageEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfc", Ranks = 6,
+                    DisplayName = "Damage Against Flanked Opponents",
+                    Description = "+1 damage per rank on weapon attacks against an opponent that is flanked or denied its Dexterity bonus to Armor Class.",
+                    Components = f => f.AddComponent<DamageBonusAgainstFlankedTargetPerRank>(),
+                },
+                new()
+                {
+                    Key = "OutsiderSpellPenEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfd", Ranks = 10,
+                    DisplayName = "Spell Penetration Against Outsiders",
+                    Description = "+1 per rank on caster level checks made to overcome the spell resistance of outsiders.",
+                    Components = f => f.AddComponent<SpellPenetrationBonusAgainstFactOwnerPerRank>(c =>
+                        c.m_RequiredTargetFact = BlueprintTool.GetRef<BlueprintUnitFactReference>(OutsiderTypeFeatureGuid)),
+                },
+                new()
+                {
+                    Key = "SneakBeforeActEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfe", Ranks = 10,
+                    DisplayName = "Sneak Attack Damage Before the Target Acts",
+                    Description = "+1 per rank on sneak attack damage rolls during the surprise round or before the target has acted in combat.",
+                    Components = f => f.AddComponent<SneakAttackBonusBeforeTargetActsPerRank>(),
+                },
+                new()
+                {
+                    Key = "MutagenDurationEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bff", Ranks = 20,
+                    DisplayName = "Mutagen Duration",
+                    Description = "+10 minutes per rank to the duration of the alchemist's mutagens.",
+                    Components = f => f.AddComponent<ExtendBuffDurationPerRank>(c =>
+                    {
+                        c.SecondsPerRank = 600;
+                        c.m_Buffs = MutagenBuffGuids
+                            .Select(g => BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(g))
+                            .ToArray();
+                    }),
+                },
+                new()
+                {
+                    Key = "DivineBondDurationEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1c00", Ranks = 20,
+                    DisplayName = "Divine Bond Duration",
+                    Description = "+1/2 minute per rank to the duration of the paladin's divine bond with her weapon.",
+                    Components = f => f.AddComponent<ExtendBuffDurationPerRank>(c =>
+                    {
+                        c.SecondsPerRank = 30;
+                        c.m_Buffs = WeaponBondDurationBuffGuids
+                            .Select(g => BlueprintTool.GetRef<Kingmaker.Blueprints.BlueprintBuffReference>(g))
+                            .ToArray();
+                    }),
                 },
                 new()
                 {
@@ -1342,7 +1551,7 @@ namespace WOTRFavoredClass
                     Key = "ShifterAspectEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf1", Ranks = 7,
                     DisplayName = "Bonus Shifter Aspect",
                     Description = "+1 use per day of shifter aspect per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(ShifterAspectResourceGuid)),
                 },
                 new()
@@ -1383,7 +1592,7 @@ namespace WOTRFavoredClass
                     Key = "JudgmentEffect", Guid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1b65", Ranks = 3,
                     DisplayName = "Bonus Judgment",
                     Description = "+1 use per day of judgment per rank.",
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(JudgmentResourceGuid)),
                 },
             };
@@ -1690,7 +1899,7 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the number of rounds per day the barbarian can rage.",
                     Races = new[] { DwarfRaceGuid, HalfOrcRaceGuid },
                     Classes = new[] { BarbarianClassGuid },
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(RageResourceGuid)),
                 },
                 new()
@@ -1701,7 +1910,7 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the number of rounds per day the bloodrager can bloodrage.",
                     Races = new[] { DwarfRaceGuid, HalfOrcRaceGuid, HumanRaceGuid, HalfElfRaceGuid, AasimarRaceGuid, TieflingRaceGuid },
                     Classes = new[] { BloodragerClassGuid },
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(BloodragerRageResourceGuid)),
                 },
                 new()
@@ -1712,7 +1921,7 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the number of rounds per day the bard can use bardic performance.",
                     Races = new[] { HalfElfRaceGuid, HalfOrcRaceGuid, GnomeRaceGuid, GoblinRaceGuid },
                     Classes = new[] { BardClassGuid },
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(BardicPerformanceResourceGuid)),
                 },
                 new()
@@ -1723,7 +1932,7 @@ namespace WOTRFavoredClass
                     Description = "Add +1 to the number of rounds per day the skald can use raging song.",
                     Races = new[] { HalfElfRaceGuid, HalfOrcRaceGuid },
                     Classes = new[] { SkaldClassGuid },
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(RagingSongResourceGuid)),
                 },
                 new()
@@ -1764,7 +1973,7 @@ namespace WOTRFavoredClass
                     Description = "Add +1 point to the arcanist's arcane reservoir.",
                     Races = new[] { ElfRaceGuid, HalfElfRaceGuid },
                     Classes = new[] { ArcanistClassGuid },
-                    Components = f => f.AddComponent<IncreaseResourceAmountPerRank>(c =>
+                    Components = f => f.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                         c.m_Resource = BlueprintTool.GetRef<BlueprintAbilityResourceReference>(ArcanistArcaneReservoirResourceGuid)),
                 },
                 new()
@@ -2331,7 +2540,10 @@ namespace WOTRFavoredClass
                     Divisor = 2, Ranks = 20, DisplayKind = BonusDisplayKind.Feats,
                     DisplayName = "Bonus Known Spell (+1/2)",
                     Description = "Add 1/2 spell known to the witch's spell list. This spell must be at least 1 level below the highest spell level the witch can cast.",
-                    Races = new[] { HumanRaceGuid, HalfOrcRaceGuid, HalfElfRaceGuid, ElfRaceGuid, AasimarRaceGuid, TieflingRaceGuid, GoblinRaceGuid },
+                    // Changeling and Orc are the "add one spell to the witch's familiar" line.
+                    // Familiars are not controllable in WOTR and hold no spell list of their own,
+                    // so the bonus is the same bonus known spell, and gets the same entry.
+                    Races = new[] { HumanRaceGuid, HalfOrcRaceGuid, HalfElfRaceGuid, ElfRaceGuid, AasimarRaceGuid, TieflingRaceGuid, GoblinRaceGuid, ChangelingRaceGuid, OrcRaceGuid },
                     Classes = new[] { WitchClassGuid },
                     ProgressGuid = WitchKnownSpellProgressGuid,
                     RewardSelectionGuid = WitchKnownSpellRewardGuid,
@@ -2667,6 +2879,95 @@ namespace WOTRFavoredClass
                     RewardFeatures = null,
                 },
 
+                // Wave 14. The pointwise tabletop lines that had no mechanism yet. Each one is a
+                // single race/class pair with its own condition; what they share is that the
+                // condition turned out to be expressible with a vanilla test, so none of them
+                // needed a new mechanism, only a new component.
+                new()
+                {
+                    Key = "BloodrageDodge", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf5",
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Dodge Bonus Against Larger Creatures (+1/4)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfb",
+                    Description = "Gain a +1/4 dodge bonus to Armor Class while bloodraging against creatures at least one size category larger than the bloodrager.",
+                    Races = new[] { HalflingRaceGuid },
+                    Classes = new[] { BloodragerClassGuid },
+                },
+                new()
+                {
+                    Key = "MutagenDuration", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf9",
+                    Divisor = 1, Ranks = 20,
+                    DisplayName = "Mutagen Duration (+10 minutes)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bff",
+                    Description = "Add +10 minutes to the duration of the alchemist's mutagens.",
+                    Races = new[] { DhampirRaceGuid },
+                    Classes = new[] { AlchemistClassGuid },
+                },
+                new()
+                {
+                    Key = "OutsiderSpellPen", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf7",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Spell Penetration Against Outsiders (+1/2)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfd",
+                    // The tabletop line reads "+1", which as a favored class bonus would reach
+                    // +20 and dwarf every comparable entry; halved on the user's decision, the
+                    // same call made for the other flat-looking lines.
+                    Description = "Add a +1/2 bonus on caster level checks made to overcome the spell resistance of outsiders.",
+                    Races = new[] { HumanRaceGuid, TieflingRaceGuid },
+                    Classes = new[] { ClericClassGuid },
+                },
+                new()
+                {
+                    Key = "FlankedDamage", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf6",
+                    Divisor = 3, Ranks = 20,
+                    DisplayName = "Damage Against Flanked Opponents (+1/3)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfc",
+                    Description = "Add 1/3 to damage rolls the fighter makes with weapon attacks against an opponent that he is flanking or that is denied its Dexterity bonus to Armor Class.",
+                    Races = new[] { KitsuneRaceGuid },
+                    Classes = new[] { FighterClassGuid },
+                },
+                new()
+                {
+                    Key = "DivineBondDuration", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfa",
+                    Divisor = 1, Ranks = 20,
+                    DisplayName = "Divine Bond Duration (+1/2 minute)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1c00",
+                    Description = "Add 1/2 minute to the duration of the paladin's divine bond with her weapon.",
+                    Races = new[] { NagajiRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                },
+                new()
+                {
+                    Key = "AuraBonus", FeatureGuid = AuraBonusCounterGuid,
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Aura of Courage and Resolve Bonus (+1/4)",
+                    EffectGuid = AuraBonusEffectGuid,
+                    Description = "Add +1/4 to the bonus the paladin grants her allies with her aura of courage and aura of resolve special abilities.",
+                    Races = new[] { FetchlingRaceGuid, OreadRaceGuid },
+                    Classes = new[] { PaladinClassGuid },
+                },
+                new()
+                {
+                    Key = "SneakBeforeAct", FeatureGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bf8",
+                    Divisor = 2, Ranks = 20,
+                    DisplayName = "Sneak Attack Damage Before the Target Acts (+1/2)",
+                    EffectGuid = "3a1b6cf1d0f34d5e9b7a2c8e4f6a1bfe",
+                    // As with the cleric entry above, the tabletop "+1" is halved.
+                    Description = "Add a +1/2 bonus on the rogue's sneak attack damage rolls during the surprise round or before the target has acted in combat.",
+                    Races = new[] { GoblinRaceGuid },
+                    Classes = new[] { RogueClassGuid },
+                },
+                new()
+                {
+                    Key = "SacredWeaponLevel", FeatureGuid = SacredWeaponLevelCounterGuid,
+                    Divisor = 4, Ranks = 20,
+                    DisplayName = "Sacred Weapon Damage Level (+1/4)",
+                    EffectGuid = SacredWeaponLevelEffectGuid,
+                    Description = "Add 1/4 to the warpriest's effective level when determining the damage of his sacred weapon.",
+                    Races = new[] { HalflingRaceGuid },
+                    Classes = new[] { WarpriestClassGuid },
+                },
+
                 // Wave 11. Cavalier and shifter — two classes that had a favored class
                 // progression but no racial bonuses at all, so the only options were the
                 // universal hit point and skill rank.
@@ -2719,7 +3020,7 @@ namespace WOTRFavoredClass
                     // The counter holds picks and the effect feature holds earned bonuses, as
                     // everywhere else. What differs is only how the effect is consumed: rather
                     // than carrying a component, its rank is read by
-                    // ContextRankConfig_GetValue_BannerPatch and added to the value the banner
+                    // ContextRankConfig_GetValue_RaisePatch and added to the value the banner
                     // already computes, so the bonus flows through the game's own scaling.
                     Description = "Add +1/4 to the cavalier's banner bonus.",
                     Races = new[] { HumanRaceGuid, KitsuneRaceGuid },
@@ -3096,14 +3397,33 @@ namespace WOTRFavoredClass
             }
 
             BuildFavoredEnemyPickPool();
+            // Every selection through which the class can end up holding a domain or school, not
+            // just the standard one. An archetype that swaps the choice out for its own — the
+            // separatist cleric, the Thassilonian wizard — hands the character domain features
+            // that are separate blueprints with separate resources, so a missing selection here
+            // is a silently absent option in the reward card rather than an error. The pool
+            // dedupes by feature, so listing a selection whose options are the ordinary ones
+            // costs nothing.
             BuildPowerUsePickPool(ClericPowerUseRewardGuid, ClericPowerUseSeed, "Cleric domain",
-                new[] { ClericDomainsSelectionGuid, ClericSecondDomainsSelectionGuid });
+                new[]
+                {
+                    ClericDomainsSelectionGuid,
+                    ClericSecondDomainsSelectionGuid,
+                    ClericSeparatistSecondDomainsSelectionGuid,
+                    ExtraDomainSelectionGuid,
+                });
             BuildPowerUsePickPool(DruidPowerUseRewardGuid, DruidPowerUseSeed, "Druid domain",
                 new[] { DruidDomainSelectionGuid });
-            // Both entry points: the wizard's own school card and the specialist selection it
-            // leads to, since an archetype may attach the schools through either.
             BuildPowerUsePickPool(WizardPowerUseRewardGuid, WizardPowerUseSeed, "Wizard school",
-                new[] { WizardSchoolSelectionGuid, WizardSpecialistSchoolSelectionGuid });
+                new[]
+                {
+                    // WizardSchoolSelectionGuid is deliberately absent. Despite the name, that
+                    // blueprint holds the OPPOSITION schools — its options are OppositionSchool*,
+                    // carrying AddOppositionSchool — which grant no powers and never could. It
+                    // contributed 0 of 8 for as long as it was listed.
+                    WizardSpecialistSchoolSelectionGuid,
+                    WizardThassilonianSchoolSelectionGuid,
+                });
             BuildPatronSpellMap();
 
             GlobalBonusExtras = globalExtras;
@@ -3132,14 +3452,20 @@ namespace WOTRFavoredClass
         {
             var picks = new List<Blueprint<BlueprintFeatureReference>>();
             var seen = new HashSet<BlueprintGuid>();
+            var perSelection = new List<string>();
             foreach (var selGuid in selectionGuids)
             {
                 var sel = ResourcesLibrary.TryGetBlueprint<BlueprintFeatureSelection>(BlueprintGuid.Parse(selGuid));
-                if (sel == null) continue;
+                if (sel == null)
+                {
+                    perSelection.Add($"{selGuid}=NOT FOUND");
+                    continue;
+                }
+                int before = picks.Count;
                 foreach (var feature in EnumerateSelectableFeatures(sel, new HashSet<BlueprintGuid>(), 0))
                 {
                     if (!seen.Add(feature.AssetGuid)) continue;
-                    var resource = FindThreePlusStatResource(feature);
+                    var resource = FindPowerResource(feature);
                     if (resource == null) continue;
 
                     var pickGuid = MergeIds(feature.AssetGuid.ToString(), seed);
@@ -3153,42 +3479,30 @@ namespace WOTRFavoredClass
                         .SetRanks(10)
                         // Only offered for a domain or school the character actually took.
                         .AddPrerequisiteFeature(feature.AssetGuid.ToString())
-                        .AddComponent<IncreaseResourceAmountPerRank>(c =>
+                        .AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
                             c.m_Resource = resource.ToReference<BlueprintAbilityResourceReference>())
                         .Configure();
                     AllModGuids.Add(pickGuid);
                     AllModBlueprintGuids.Add(BlueprintGuid.Parse(pickGuid));
                     picks.Add(pickGuid);
                 }
+                perSelection.Add($"{sel.name}={picks.Count - before}");
             }
 
             FeatureSelectionConfigurator.For(rewardGuid)
                 .AddToAllFeatures(picks.ToArray())
                 .Configure();
-            Main.Log($"{label} power-use pick pool: {picks.Count} powers.");
+            // Per selection, not just the total. A selection contributing 0 is how an archetype
+            // that swaps the domain or school choice for its own goes missing — the card still
+            // opens, it just never offers that character's actual domain. A total alone hides it.
+            Main.Log($"{label} power-use pick pool: {picks.Count} powers [{string.Join(", ", perSelection)}].");
 
-            // An empty pool is a silent failure in play: the outer card unfolds onto a selection
-            // with nothing in it, so the bonus can be taken once and never again. Rather than
-            // leaving that to be guessed at from the outside, say what was actually inspected.
+            // Not diagnostics but a real failure worth one line: an empty pool means the card
+            // unfolds onto a selection with nothing in it, so the bonus can be taken once and
+            // never again. Silence here would make that look like a content decision.
             if (picks.Count == 0)
             {
-                foreach (var selGuid in selectionGuids)
-                {
-                    var sel = ResourcesLibrary.TryGetBlueprint<BlueprintFeatureSelection>(BlueprintGuid.Parse(selGuid));
-                    if (sel == null)
-                    {
-                        Main.Log($"  {label}: selection {selGuid} NOT FOUND.");
-                        continue;
-                    }
-                    var options = EnumerateSelectableFeatures(sel, new HashSet<BlueprintGuid>(), 0).ToList();
-                    Main.Log($"  {label}: '{sel.name}' flattened to {options.Count} options, none with a " +
-                        "3 + stat resource. First few:");
-                    foreach (var o in options.Take(8))
-                    {
-                        Main.Log($"      {o.name} ({o.GetType().Name}), components: " +
-                            string.Join(", ", o.ComponentsArray.Select(c => c.GetType().Name).Take(6)));
-                    }
-                }
+                Main.Log($"WARNING: {label} power-use pool is EMPTY; the reward card will offer nothing.");
             }
         }
 
@@ -3227,12 +3541,12 @@ namespace WOTRFavoredClass
         // The walk is recursive because the nesting depth is not uniform: some powers hang
         // directly off the domain, others sit a feature or two down. Depth is capped and visited
         // blueprints are remembered, so a cycle cannot run away.
-        private static BlueprintAbilityResource FindThreePlusStatResource(BlueprintScriptableObject root)
+        private static BlueprintAbilityResource FindPowerResource(BlueprintScriptableObject root)
         {
-            return FindThreePlusStatResource(root, new HashSet<BlueprintGuid>(), 0);
+            return FindResource(root, new HashSet<BlueprintGuid>(), 0);
         }
 
-        private static BlueprintAbilityResource FindThreePlusStatResource(
+        private static BlueprintAbilityResource FindResource(
             BlueprintScriptableObject bp, HashSet<BlueprintGuid> visited, int depth)
         {
             if (bp == null || depth > 4 || !visited.Add(bp.AssetGuid)) return null;
@@ -3252,13 +3566,13 @@ namespace WOTRFavoredClass
                         resource = activatable.m_RequiredResource?.Get();
                         break;
                 }
-                if (Is3PlusStat(resource)) return resource;
+                if (IsPerDayPowerResource(resource)) return resource;
 
                 if (component is Kingmaker.UnitLogic.FactLogic.AddFacts addFacts && addFacts.m_Facts != null)
                 {
                     foreach (var factRef in addFacts.m_Facts)
                     {
-                        var found = FindThreePlusStatResource(factRef?.Get(), visited, depth + 1);
+                        var found = FindResource(factRef?.Get(), visited, depth + 1);
                         if (found != null) return found;
                     }
                 }
@@ -3271,7 +3585,7 @@ namespace WOTRFavoredClass
                     if (entry?.Features == null) continue;
                     foreach (var f in entry.Features)
                     {
-                        var found = FindThreePlusStatResource(f, visited, depth + 1);
+                        var found = FindResource(f, visited, depth + 1);
                         if (found != null) return found;
                     }
                 }
@@ -3280,12 +3594,27 @@ namespace WOTRFavoredClass
         }
 
         // The tabletop wording is the filter: "normally usable a number of times per day equal to
-        // 3 + the ability modifier". That excludes the Greater powers and anything level-scaled.
-        private static bool Is3PlusStat(BlueprintAbilityResource resource)
+        // 3 + the ability modifier". What matters is the SHAPE — a small fixed base plus a stat
+        // modifier, with no level scaling — which is what separates a 1st-level domain or school
+        // power from the Greater powers and from anything that grows with level.
+        //
+        // The base is 3 for an ordinary cleric, wizard or druid, and **2 for the separatist**,
+        // whose domain powers run at one cleric level lower; Owlcat wrote that straight into the
+        // resource (AirDomainBaseResourceSeparatist is 2 + Wisdom). Requiring exactly 3 therefore
+        // rejected 73 of the separatist's 75 domains while accepting the two that happen to share
+        // a resource with the standard line — which is how the archetype came to have a reward
+        // card that never listed the domain it had actually taken.
+        //
+        // Two values rather than a range, deliberately: these are the two shapes observed in the
+        // game's data, and the pool's diagnostic now prints the amount of any resource it rejects,
+        // so a third shape shows up as a log line to be looked at rather than as silence.
+        private static bool IsPerDayPowerResource(BlueprintAbilityResource resource)
         {
             if (resource == null) return false;
             var amount = resource.m_MaxAmount;
-            return amount.BaseValue == 3 && amount.IncreasedByStat;
+            if (!amount.IncreasedByStat) return false;
+            if (amount.IncreasedByLevel || amount.IncreasedByLevelStartPlusDivStep) return false;
+            return amount.BaseValue == 3 || amount.BaseValue == 2;
         }
 
         private static void BuildFavoredEnemyPickPool()

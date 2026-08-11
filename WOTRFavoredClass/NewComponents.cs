@@ -66,6 +66,8 @@ namespace WOTRFavoredClass
     // +1 caster level per rank for spells carrying a given descriptor. The school-based
     // component above cannot express this: a descriptor such as Good is orthogonal to the
     // school. Reads the descriptor off the cast context, which is where the engine keeps it.
+    // Vanilla IncreaseSpellDescriptorCasterLevel does the same filtering but takes a flat int
+    // with no rank scaling, which is the whole of what a favored class bonus needs.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
     [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a15")]
     public class IncreaseSpellDescriptorCasterLevelPerRank : UnitFactComponentDelegate,
@@ -169,17 +171,6 @@ namespace WOTRFavoredClass
             {
                 evt.AddTemporaryModifier(
                     evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
-                if (Diagnostics.Enabled)
-                {
-                    Diagnostics.Tally(OnlyAttackOfOpportunity
-                        ? "challenge: +damage on attack of opportunity"
-                        : "challenge: +damage vs challenged target");
-                    if (Diagnostics.VerboseHotPaths)
-                    {
-                        Diagnostics.Log("challenge", $"{Diagnostics.Describe(Owner)} +{bonus} damage vs " +
-                            $"{Diagnostics.Describe(evt.Target)}{(OnlyAttackOfOpportunity ? " (AoO)" : "")}");
-                    }
-                }
             }
         }
 
@@ -197,6 +188,10 @@ namespace WOTRFavoredClass
     // modals, so the lower-level claws reuse the generic Claw1dX blueprints that animal forms
     // also use — which is why matching the weapon blueprint cannot work and the modal's own buff
     // is the thing to key on.
+    //
+    // Vanilla WeaponParametersDamageBonus is the closest shipped component and does scale, but
+    // it filters on finessable/ranged/two-handed rather than on a weapon category, so it cannot
+    // name claws or picks.
     //
     // The category is tested first: it is a field read, whereas the buff scan walks a collection,
     // and the overwhelming majority of attacks in play are not claws at all.
@@ -224,30 +219,10 @@ namespace WOTRFavoredClass
             }
             if (!match) return;
 
-            if (m_RequiredOwnerBuffs.Length > 0)
-            {
-                bool active = false;
-                foreach (var buff in Owner.Buffs.Enumerable)
-                {
-                    for (int i = 0; i < m_RequiredOwnerBuffs.Length; i++)
-                    {
-                        if (m_RequiredOwnerBuffs[i].Get() == buff.Blueprint) { active = true; break; }
-                    }
-                    if (active) break;
-                }
-                if (!active) return;
-            }
+            if (!BuffCheck.OwnerHasAny(Owner, m_RequiredOwnerBuffs)) return;
 
             evt.AddTemporaryModifier(
                 evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
-            if (Diagnostics.Enabled)
-            {
-                Diagnostics.Tally("claws: +damage on a claw attack with the modal active");
-                if (Diagnostics.VerboseHotPaths)
-                {
-                    Diagnostics.Log("claws", $"{Diagnostics.Describe(Owner)} +{bonus} claw damage vs {Diagnostics.Describe(evt.Target)}");
-                }
-            }
         }
 
         public void OnEventDidTrigger(RuleAttackWithWeapon evt) { }
@@ -257,6 +232,16 @@ namespace WOTRFavoredClass
     // "increase the AC bonus from defensive instinct by 1/4 against creatures of size Large or
     // larger"). Reads State.Size rather than OriginalSize so an enlarged attacker counts, which
     // is how the tabletop size categories work in play.
+    //
+    // m_RequiredOwnerBuffs narrows it to "only while a modal is up" — the halfling bloodrager
+    // gets the same bonus but only while bloodraging. Empty means always, which is the shifter.
+    //
+    // Vanilla ACBonusAgainstSize comes close and should be reconsidered if this entry ever
+    // changes: it takes a ContextValue (so a ContextRankConfig would scale it), it can express
+    // "one category larger than me" as a delta, and its SizeType.FromState is the same reading
+    // of size taken here. What it has no notion of is a required buff on the defender, which the
+    // halfling bloodrager needs — "while bloodraging" is half the bonus. Keeping one component
+    // for both entries beats splitting the family across two mechanisms for the shifter's sake.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
     [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a17")]
     public class ACBonusAgainstLargerCreaturesPerRank : UnitFactComponentDelegate,
@@ -265,6 +250,7 @@ namespace WOTRFavoredClass
         ISubscriber, ITargetRulebookSubscriber
     {
         public Kingmaker.Enums.Size MinimumSize = Kingmaker.Enums.Size.Large;
+        public BlueprintBuffReference[] m_RequiredOwnerBuffs = new BlueprintBuffReference[0];
         public int Divisor = 1;
 
         public void OnEventAboutToTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt)
@@ -273,24 +259,183 @@ namespace WOTRFavoredClass
             if (bonus <= 0) return;
             var attacker = evt.Initiator;
             if (attacker == null) return;
+            // Size first: a field read, against a walk of the owner's buffs. Most attacks in
+            // play come from creatures that are not Large, so the buff scan rarely runs.
             if (attacker.State.Size < MinimumSize) return;
+            if (!BuffCheck.OwnerHasAny(Owner, m_RequiredOwnerBuffs)) return;
             evt.AddModifier(bonus, Fact, ModifierDescriptor.Dodge);
-            if (Diagnostics.Enabled)
-            {
-                Diagnostics.Tally("defensive instinct: +AC vs a larger creature");
-                if (Diagnostics.VerboseHotPaths)
-                {
-                    Diagnostics.Log("instinct", $"{Diagnostics.Describe(Owner)} +{bonus} dodge AC vs " +
-                        $"{Diagnostics.Describe(attacker)} (size {attacker.State.Size})");
-                }
-            }
         }
 
         public void OnEventDidTrigger(Kingmaker.RuleSystem.Rules.RuleCalculateAC evt) { }
     }
 
+    // Shared by every component that gates a bonus on "one of these buffs is up on the owner".
+    // Plain loops, no LINQ: all callers sit inside rulebook events.
+    internal static class BuffCheck
+    {
+        internal static bool OwnerHasAny(UnitEntityData owner, BlueprintBuffReference[] required)
+        {
+            if (required == null || required.Length == 0) return true;
+            if (owner == null) return false;
+            foreach (var buff in owner.Buffs.Enumerable)
+            {
+                for (int i = 0; i < required.Length; i++)
+                {
+                    if (required[i].Get() == buff.Blueprint) return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    // "+1/3 to damage rolls against an opponent that is flanked or denied its Dexterity bonus
+    // to AC" (kitsune fighter). WOTR has no separate notion of "denied Dex" — the vanilla
+    // FlankedAttackBonus resolves the same tabletop wording as flanked-or-flat-footed, and this
+    // reuses its exact test so the two never disagree about who counts as flanked.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a19")]
+    public class DamageBonusAgainstFlankedTargetPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RuleAttackWithWeapon>, IRulebookHandler<RuleAttackWithWeapon>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(RuleAttackWithWeapon evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var target = evt.Target;
+            if (target == null) return;
+            // Same pair of tests the vanilla FlankedAttackBonus runs. It also reads
+            // RuleCalculateAttackBonus.TargetIsFlanked, which has no counterpart on this rule —
+            // that flag is set by abilities that declare their target flanked for the attack roll
+            // only, and it is gone by the time damage is worked out.
+            if (!target.CombatState.IsFlanked
+                && !Kingmaker.RuleSystem.Rulebook.Trigger(
+                        new RuleCheckTargetFlatFooted(evt.Initiator, target)).IsFlatFooted)
+            {
+                return;
+            }
+            evt.AddTemporaryModifier(
+                evt.Initiator.Stats.AdditionalDamage.AddModifier(bonus, Fact, ModifierDescriptor.UntypedStackable));
+        }
+
+        public void OnEventDidTrigger(RuleAttackWithWeapon evt) { }
+    }
+
+    // "+1/2 bonus on caster level checks made to overcome the spell resistance of outsiders."
+    // Shaped after the vanilla SpellPenetrationBonus, which hooks the same rule and calls the
+    // same AddSpellPenetration; what it does not have is a check on the target, and the rule is
+    // a RulebookTargetEvent so the target is right there.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a1a")]
+    public class SpellPenetrationBonusAgainstFactOwnerPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RuleSpellResistanceCheck>, IRulebookHandler<RuleSpellResistanceCheck>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        // The creature type in WOTR is a feature on the unit (OutsiderType and friends), so the
+        // check is a fact lookup rather than an enum comparison.
+        public BlueprintUnitFactReference m_RequiredTargetFact;
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(RuleSpellResistanceCheck evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var required = m_RequiredTargetFact?.Get();
+            if (required == null) return;
+            var target = evt.Target;
+            if (target == null || !target.Descriptor.HasFact(required)) return;
+            evt.AddSpellPenetration(bonus, ModifierDescriptor.UntypedStackable);
+        }
+
+        public void OnEventDidTrigger(RuleSpellResistanceCheck evt) { }
+    }
+
+    // "+1/2 bonus on sneak attack damage rolls during the surprise round or before the target
+    // has acted in combat" (goblin rogue).
+    //
+    // Two things had to be located rather than assumed. The condition is
+    // UnitCombatState.IsWaitingInitiative, which is exactly "has not acted yet" — the initiative
+    // cooldown in real time, !HadTurnInTMBCombat in turn-based. And the bonus has to land on the
+    // sneak damage itself: RulePrepareDamage.OnTrigger is what appends that entry (marked
+    // Sneak = true), so the bonus is added afterwards, in DidTrigger, once the entry exists.
+    // The vanilla AdditionalDamageOnSneakAttack was the wrong tool — it is a per-DIE bonus and
+    // unconditional, so it would pay out several times over and in the wrong situations.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a1b")]
+    public class SneakAttackBonusBeforeTargetActsPerRank : UnitFactComponentDelegate,
+        IInitiatorRulebookHandler<RulePrepareDamage>, IRulebookHandler<RulePrepareDamage>,
+        ISubscriber, IInitiatorRulebookSubscriber
+    {
+        public int Divisor = 1;
+
+        public void OnEventAboutToTrigger(RulePrepareDamage evt) { }
+
+        public void OnEventDidTrigger(RulePrepareDamage evt)
+        {
+            int bonus = Fact.GetRank() / Divisor;
+            if (bonus <= 0) return;
+            var target = evt.Target;
+            if (target == null || !target.CombatState.IsWaitingInitiative) return;
+
+            var bundle = evt.DamageBundle;
+            if (bundle == null) return;
+            foreach (var damage in bundle)
+            {
+                if (!damage.Sneak) continue;
+                damage.AddModifier(bonus, Fact);
+                return;
+            }
+        }
+    }
+
+    // "Add N to the duration of <buff>" — the alchemist's mutagen (+10 minutes per pick) and the
+    // paladin's divine bond with her weapon (+1/2 minute per pick).
+    //
+    // Duration is fixed when the buff is applied, out of a ContextDurationValue on the ability,
+    // and there is no vanilla component that adds to it. But Buff.IncreaseDuration is public, so
+    // the buff is simply lengthened the moment it lands. Patching ContextDurationValue.Calculate
+    // instead was rejected: it sits on the path of every buff in the game.
+    //
+    // IUnitBuffHandler is a global subscriber, so the first test is a reference comparison
+    // against the owner and almost every call stops there.
+    [AllowedOn(typeof(BlueprintUnitFact), false)]
+    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a1c")]
+    public class ExtendBuffDurationPerRank : UnitFactComponentDelegate,
+        IUnitBuffHandler, IGlobalSubscriber, ISubscriber
+    {
+        public BlueprintBuffReference[] m_Buffs = new BlueprintBuffReference[0];
+        public int SecondsPerRank = 60;
+
+        public void HandleBuffDidAdded(Kingmaker.UnitLogic.Buffs.Buff buff)
+        {
+            if (buff == null || buff.Owner != Owner.Descriptor) return;
+            int rank = Fact.GetRank();
+            if (rank <= 0) return;
+            bool listed = false;
+            for (int i = 0; i < m_Buffs.Length; i++)
+            {
+                if (m_Buffs[i].Get() == buff.Blueprint) { listed = true; break; }
+            }
+            if (!listed) return;
+            // A buff with no planned duration is permanent; lengthening it is meaningless and
+            // IncreaseDuration on such a buff would give it an end time it never had.
+            if (buff.PlannedDuration == null) return;
+
+            var added = System.TimeSpan.FromSeconds((double)SecondsPerRank * rank);
+            buff.IncreaseDuration(added);
+        }
+
+        public void HandleBuffDidRemoved(Kingmaker.UnitLogic.Buffs.Buff buff) { }
+    }
+
     // "+1/4 dodge bonus to AC against favored enemies": applies to the owner's AC
     // only when the attacker matches one of the owner's favored enemy entries.
+    //
+    // Why not vanilla ACBonusAgainstFactOwner, which does scale by rank: it tests ONE fixed
+    // fact, and a favored enemy is a set that differs per character and grows as the ranger
+    // levels. The set has to be read from UnitPartFavoredEnemy at the moment of the roll.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
     [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a06")]
     public class ACBonusAgainstFavoredEnemyPerRank : UnitFactComponentDelegate,
@@ -333,25 +478,6 @@ namespace WOTRFavoredClass
                 }
             }
             return false;
-        }
-    }
-
-    // Rank-scaled resource-pool bonus: adds Fact.GetRank() to the max amount of the
-    // named BlueprintAbilityResource (rage rounds, ki pool, arcane pool...). Uses the
-    // same native query interface TabletopTweaks-Core uses for its weapon-training-
-    // scaled resource bonus, so no Harmony patch is needed — the engine calls this on
-    // every max-amount recalculation.
-    [AllowedOn(typeof(BlueprintUnitFact), false)]
-    [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a08")]
-    public class IncreaseResourceAmountPerRank : UnitFactComponentDelegate, IResourceAmountBonusHandler, IUnitSubscriber, ISubscriber
-    {
-        public BlueprintAbilityResourceReference m_Resource;
-
-        public void CalculateMaxResourceAmount(BlueprintAbilityResource resource, ref int bonus)
-        {
-            if (!Fact.Active) return;
-            if (m_Resource?.Get() != resource) return;
-            bonus += Fact.GetRank();
         }
     }
 
@@ -413,7 +539,8 @@ namespace WOTRFavoredClass
         }
     }
 
-    // Display-only prerequisite: always passes, shows how many times an incremental
+    // No vanilla counterpart: every shipped prerequisite exists to gate a choice, none to render
+    // progress text. Display-only prerequisite: always passes, shows how many times an incremental
     // bonus has been taken and how far the next threshold is (mirrors the progress
     // line that cycle-based bonuses get from PrerequisiteFactRankCycle).
     [AllowedOn(typeof(BlueprintFeature), false)]
@@ -455,6 +582,8 @@ namespace WOTRFavoredClass
         }
     }
 
+    // No vanilla counterpart: nothing shipped gates a choice on "the carrier's rank is a
+    // multiple of N", which is what a fractional favored class bonus needs.
     // Cadence gate for "1/N of a bonus" favored class options. The partial fact
     // counts EVERY pick (including reward picks, which add a partial rank via the
     // SelectFeature postfix), the full fact counts rewards taken:
@@ -531,7 +660,9 @@ namespace WOTRFavoredClass
     }
 
     // Flat damage bonus per rank for a whitelisted set of abilities (kineticist
-    // blasts). Matches both the exact ability and its variant parent, because blast
+    // blasts). No vanilla equivalent scales by rank: SpecificSpellDamageBonus and
+    // AddOutgoingDamageBonus both take a flat value.
+    // Matches both the exact ability and its variant parent, because blast
     // forms (extended range, kinetic blade...) are child abilities whose Parent
     // points back to the base blast.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
@@ -566,7 +697,8 @@ namespace WOTRFavoredClass
     }
 
     // Flat damage bonus per rank for spells matching a spell descriptor (fire, acid...).
-    // Same RuleCalculateDamage hook TTT-Core's BonusDamagePerDie uses.
+    // Same RuleCalculateDamage hook TTT-Core's BonusDamagePerDie uses. Vanilla has no
+    // descriptor-filtered damage bonus at all, rank-scaled or otherwise.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
     [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a0b")]
     public class SpellDescriptorDamageBonusPerRank : UnitFactComponentDelegate,
@@ -594,6 +726,7 @@ namespace WOTRFavoredClass
 
     // Flat damage bonus per rank for spell-inflicted damage of a specific energy type
     // (negative energy...). Applies only to the matching energy entries of the bundle.
+    // Vanilla EnergyDamageBonus takes a flat value and does not scale by rank.
     [AllowedOn(typeof(BlueprintUnitFact), false)]
     [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a0c")]
     public class EnergyTypeDamageBonusPerRank : UnitFactComponentDelegate,
@@ -621,7 +754,9 @@ namespace WOTRFavoredClass
         public void OnEventDidTrigger(RuleCalculateDamage evt) { }
     }
 
-    // Attack roll bonus per rank against the owner's favored enemies. Same
+    // Attack roll bonus per rank against the owner's favored enemies. Vanilla
+    // AttackBonusAgainstFactOwner scales by rank but tests one fixed fact, which a favored
+    // enemy set is not. Same
     // UnitPartFavoredEnemy check as ACBonusAgainstFavoredEnemyPerRank, but on the
     // initiator side of RuleCalculateAttackBonus (pattern proven by PrestigePlus
     // ViciousAimComp). UntypedStackable so it stacks with the ranger's own
@@ -651,8 +786,9 @@ namespace WOTRFavoredClass
         public void OnEventDidTrigger(RuleCalculateAttackBonus evt) { }
     }
 
-    // Damage bonus per rank against the owner's favored enemies: a temporary
-    // AdditionalDamage stat modifier scoped to the single attack (pattern proven by
+    // Damage bonus per rank against the owner's favored enemies. Vanilla
+    // DamageBonusAgainstFactOwner scales by rank but tests one fixed fact, not a set. A
+    // temporary AdditionalDamage stat modifier scoped to the single attack (pattern proven by
     // TTT-Core DamageBonusOrderOfCockatriceTTT and PrestigePlus ViciousAimComp).
     [AllowedOn(typeof(BlueprintUnitFact), false)]
     [TypeId("9c41d35e668d4dfd8f7f2f8a3b1c5a0e")]
@@ -846,7 +982,10 @@ namespace WOTRFavoredClass
         }
     }
 
-    // +1 caster level per rank when casting one of the character's patron spells.
+    // +1 caster level per rank when casting one of the character's patron spells. Vanilla
+    // AddCasterLevelForAbility names a single ability and takes a flat value, so covering 101
+    // patron spells with a rank would mean 101 components carrying a number they cannot scale.
+    //
     // A witch's patron is a progression that grants its spells through AddKnownSpell
     // components, so the patron -> spell mapping is read out of the patron
     // progressions themselves at install time (see FavoredClasses.PatronSpells)
@@ -927,12 +1066,6 @@ namespace WOTRFavoredClass
             pet.Descriptor.AddFact<Feature>(bp)?.SetSource(source, 1);
             // Guarded, not left to Event's own early return: the interpolation would otherwise
             // run and allocate before the call, even with diagnostics off.
-            if (Diagnostics.Enabled)
-            {
-                Diagnostics.Event("pet", $"granted '{bp.name}' to {Diagnostics.Describe(pet)} " +
-                    $"(master {Diagnostics.Describe(Owner)}, counter rank " +
-                    $"{Owner.Progression.Features.GetRank(Fact.Blueprint as BlueprintFeature)})");
-            }
         }
 
         void TryRevoke(UnitEntityData pet)

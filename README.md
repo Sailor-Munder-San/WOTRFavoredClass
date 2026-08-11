@@ -12,40 +12,40 @@ Roleplaying Game rules.
 
 ## Bonuses
 
-108 racial favored class bonuses, plus the universal +1 hit point / +1/2 skill rank every
+116 racial favored class bonuses, plus the universal +1 hit point / +1/2 skill rank every
 character can take instead. The favored class is chosen at the race step of character creation,
 and half-elves get **Multitalented**: two favored classes, either of which pays out whenever they
 take a level in it.
 
 | Class | Racial favored class bonuses |
 |---|---|
-| **Alchemist** | Natural Armor Bonus (Dwarf); Bombs (Gnome, Hobgoblin); Fire Resistance (Goblin); Known Formula (Elf, Human, Halfling, Half-Elf, Half-Orc, Aasimar, Tiefling); Bomb Damage (Half-Orc, Tiefling) |
+| **Alchemist** | Natural Armor Bonus (Dwarf); Bombs (Gnome, Hobgoblin); Fire Resistance (Goblin); Known Formula (Elf, Human, Halfling, Half-Elf, Half-Orc, Aasimar, Tiefling); Bomb Damage (Half-Orc, Tiefling); Mutagen Duration (Dhampir) |
 | **Antipaladin** | Cruelty (Drow) |
 | **Arcanist** | Arcane Reservoir (Elf, Half-Elf); Arcanist Exploit (Halfling); Concentration Bonus (Half-Orc); Arcane Reservoir Restored (Gnome); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Chaotic Spell Caster Level (Ganzi) |
 | **Barbarian** | Speed (Elf, Half-Elf); Rage Rounds (Dwarf, Half-Orc); Cold/Electricity Resistance (Fetchling) |
 | **Bard** | Bardic Performance (Half-Elf, Half-Orc, Gnome, Goblin); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
-| **Bloodrager** | Speed (Elf, Half-Elf); Bloodrage Rounds (Dwarf, Half-Orc, Human, Half-Elf, Aasimar, Tiefling); Concentration Bonus (Drow) |
+| **Bloodrager** | Speed (Elf, Half-Elf); Bloodrage Rounds (Dwarf, Half-Orc, Human, Half-Elf, Aasimar, Tiefling); Concentration Bonus (Drow); Dodge Bonus Against Larger Creatures (Halfling) |
 | **Cavalier** | Damage Against Challenged Targets (Aasimar); Damage Against Challenged Targets (Dwarf); Mount Hit Points (Elf, Goblin, Half-Orc); Mount Speed (Gnome, Half-Elf, Nagaji); Banner Bonus (Human, Kitsune); Attack of Opportunity Damage Against Challenged Targets (Halfling) |
-| **Cleric** | Negative Energy Spell Damage (Hobgoblin, Fetchling); Channel Energy Bonus (Half-Elf); Harm Undead Bonus (Aasimar); Domain Power Use (Dwarf, Elf, Halfling, Half-Orc) |
+| **Cleric** | Negative Energy Spell Damage (Hobgoblin, Fetchling); Channel Energy Bonus (Half-Elf); Harm Undead Bonus (Aasimar); Domain Power Use (Dwarf, Elf, Halfling, Half-Orc); Spell Penetration Against Outsiders (Human, Tiefling) |
 | **Druid** | Companion Damage Reduction (Gnome, Fetchling, Svirfneblin); Companion Saving Throws (Halfling); Wild Shape Natural Armor Bonus (Elf, Half-Orc, Half-Elf); Companion Hit Points (Goblin, Half-Orc); Acid/Cold/Electricity/Fire Resistance (Gnome); Domain Power Use (Dwarf) |
-| **Fighter** | Disarm Bonus (Drow) |
+| **Fighter** | Disarm Bonus (Drow); Damage Against Flanked Opponents (Kitsune) |
 | **Hunter** | Companion Damage Reduction (Gnome, Fetchling, Svirfneblin); Companion Saving Throws (Halfling); Companion Hit Points (Goblin, Half-Orc) |
 | **Inquisitor** | Concentration Bonus (Hobgoblin); Judgment (Duergar); Teamwork Feat (Drow, Half-Elf, Halfling); Known Spell (Elf, Human, Half-Elf, Half-Orc, Aasimar, Tiefling) |
 | **Kineticist** | Wild Talent (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Earth Blast Damage (Dwarf); Elemental Blast Damage (Elf, Half-Elf) |
 | **Magus** | Arcane Pool (Human, Half-Elf, Half-Orc, Aasimar, Tiefling, Suli, Fetchling); Magus Arcana (Elf, Halfling, Half-Elf); Eldritch Scion Arcana (Elf, Halfling, Half-Elf); Fire Spell Damage (Half-Orc) |
 | **Monk** | Ki Pool (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Grapple and Trip Bonus (Hobgoblin); Speed (Elf, Half-Elf) |
 | **Oracle** | Negative Energy Spell Damage (Dhampir); Known Spell (Elf, Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Known Spell — Enchantment (Ganzi) |
-| **Paladin** | Concentration Bonus (Dwarf); Lay on Hands Bonus (Elf, Gnome, Halfling, Half-Elf); Lay on Hands Self-Healing Bonus (Tiefling); Acid/Cold/Electricity/Fire Resistance (Human) |
+| **Paladin** | Concentration Bonus (Dwarf); Lay on Hands Bonus (Elf, Gnome, Halfling, Half-Elf); Lay on Hands Self-Healing Bonus (Tiefling); Acid/Cold/Electricity/Fire Resistance (Human); Divine Bond Duration (Nagaji); Aura of Courage and Resolve Bonus (Fetchling, Oread) |
 | **Ranger** | Dodge Bonus Against Favored Enemies (Halfling); Favored Enemy Bonus (Hobgoblin); Acid/Cold/Fire/Electricity Resistance (Suli); Companion Damage Reduction (Gnome, Fetchling, Svirfneblin); Companion Natural Armor (Oread) |
-| **Rogue** | Rogue Talent (Human, Half-Elf, Half-Orc, Aasimar, Tiefling, Changeling, Kitsune, Samsaran) |
+| **Rogue** | Rogue Talent (Human, Half-Elf, Half-Orc, Aasimar, Tiefling, Changeling, Kitsune, Samsaran); Sneak Attack Damage Before the Target Acts (Goblin) |
 | **Shaman** | Shaman Hex (Gnome); Known Spell (Half-Elf, Human, Half-Orc, Aasimar, Tiefling); Known Spell — Enchantment (Kitsune) |
 | **Shifter** | Shifter Aspect (Human); Claw Damage (Orc); Speed (Elf); Dodge Bonus Against Large Creatures (Halfling); Acid/Cold/Electricity/Fire Resistance (Gnome) |
 | **Skald** | Raging Song (Half-Elf, Half-Orc); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Concentration Bonus (Gnome) |
 | **Slayer** | Slayer Talent (Human, Gnome, Half-Elf, Half-Orc, Aasimar, Tiefling); Dodge Bonus Against Studied Targets (Halfling, Fetchling) |
 | **Sorcerer** | Enchantment Spell DC (Kitsune); Acid Spell Damage (Dwarf, Oread); Fire Spell Damage (Half-Orc); Cold/Electricity Resistance (Fetchling); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Known Spell — Fire (Goblin); Good Spell Caster Level (Aasimar); Known Spell — Curse or Evil (Drow) |
 | **Swashbuckler** | Panache (Elf, Human, Half-Elf, Half-Orc, Tiefling, Aasimar, Kitsune); Charmed Life (Gnome, Halfling, Half-Elf); Precise Strike Damage with Picks (Dwarf) |
-| **Warpriest** | Combat Feat (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Channel Energy Bonus (Half-Elf); Blessings (Dwarf, Elf, Nagaji); Fervor Bonus (Drow) |
-| **Witch** | Witch Hex (Gnome); Patron Spells Caster Level (Halfling); Known Spell (Human, Half-Orc, Half-Elf, Elf, Aasimar, Tiefling, Goblin) |
+| **Warpriest** | Combat Feat (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); Channel Energy Bonus (Half-Elf); Blessings (Dwarf, Elf, Nagaji); Sacred Weapon Damage Level (Halfling); Fervor Bonus (Drow) |
+| **Witch** | Witch Hex (Gnome); Patron Spells Caster Level (Halfling); Known Spell (Human, Half-Orc, Half-Elf, Elf, Aasimar, Tiefling, Goblin, Changeling, Orc) |
 | **Wizard** | Necromancy Caster Level (Dhampir); Known Spell (Human, Half-Elf, Half-Orc, Aasimar, Tiefling); School Power Use (Drow, Elf, Gnome) |
 | **Kitsune** (any favored class) | Magical Tail |
 

@@ -98,13 +98,6 @@ namespace WOTRFavoredClass
                 if (!IsOurSelection(features[i])) filtered.Add(features[i]);
             }
             features = filtered;
-
-            if (Diagnostics.Enabled)
-            {
-                Diagnostics.First("gate", "progression:" + (u.Blueprint?.name ?? "?"),
-                    $"progression gate withheld the favored class selection from {Diagnostics.Describe(u)} " +
-                    $"(reason: {(u.IsPet ? "pet" : "not player faction")})");
-            }
         }
 
         static bool IsOurSelection(BlueprintFeatureBase feature)
@@ -208,12 +201,6 @@ namespace WOTRFavoredClass
                 {
                     pickedFact.SetSource((Kingmaker.UnitLogic.FeatureSource)ownerClass, level);
                 }
-                if (Diagnostics.Enabled)
-                {
-                    Diagnostics.First("pick", $"class:{picked.name}:{unit.Unit?.UniqueId}",
-                        $"{Diagnostics.Describe(unit.Unit)} chose favored class '{picked.name}' at character " +
-                        $"level {level}; sourced to {(ownerClass != null ? ownerClass.name : "<CLASS NOT RESOLVED>")}");
-                }
                 return;
             }
 
@@ -224,57 +211,22 @@ namespace WOTRFavoredClass
                 {
                     unit.AddFact<Feature>(counterBp)?.SetSource(source, level);
                 }
-                if (Diagnostics.Enabled)
-                {
-                    Diagnostics.Event("reward", $"{Diagnostics.Describe(unit.Unit)} took reward '{picked.name}'; " +
-                        $"counter '{counterBp?.name ?? "<missing>"}' now rank " +
-                        $"{(counterBp != null ? unit.Progression.Features.GetRank(counterBp) : 0)}");
-                }
                 return;
             }
 
-            if (!FavoredClasses.EffectGrants.TryGetValue(guid, out var grant))
-            {
-                // Only our own blueprints. SelectFeature.Apply fires for EVERY feature selection
-                // in the game, including each feat every NPC picks while auto-levelling, so
-                // logging unconditionally here buried the real lines: a session produced 627
-                // pick lines of which 11 were ours.
-                //
-                // Keyed on rank so a repeat at the same rank collapses into the counter: the
-                // engine calls Apply more than once for a single confirmed pick, which otherwise
-                // reads as the player having taken the bonus several times.
-                if (Diagnostics.Enabled && FavoredClasses.AllModBlueprintGuids.Contains(guid))
-                {
-                    int r = unit.Progression.Features.GetFact(picked)?.GetRank() ?? 0;
-                    Diagnostics.First("pick", $"pick:{picked.name}:{unit.Unit?.UniqueId}:{r}",
-                        $"{Diagnostics.Describe(unit.Unit)} took '{picked.name}', now rank {r} — " +
-                        "no effect feature bound to this blueprint (its effect rides the blueprint " +
-                        "itself, or it is a wrapper's outer card or progress counter)");
-                }
-                return;
-            }
+            // SelectFeature.Apply fires for EVERY feature selection in the game, including each
+            // feat every NPC picks while auto-levelling, so the dictionary lookup above is the
+            // whole of the work for anything that is not ours.
+            if (!FavoredClasses.EffectGrants.TryGetValue(guid, out var grant)) return;
             int rank = unit.Progression.Features.GetFact(picked)?.GetRank() ?? 0;
             if (rank <= 0 || rank % grant.Divisor != 0)
             {
-                if (Diagnostics.Enabled)
-                {
-                    Diagnostics.First("pick", $"pick:{picked.name}:{unit.Unit?.UniqueId}:{rank}",
-                        $"{Diagnostics.Describe(unit.Unit)} took '{picked.name}', now rank {rank} of " +
-                        $"{grant.Divisor} toward the next increment — no effect granted yet, as expected");
-                }
                 return;
             }
             var effectBp = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(grant.EffectGuid);
             if (effectBp != null)
             {
                 unit.AddFact<Feature>(effectBp)?.SetSource(source, level);
-            }
-            if (Diagnostics.Enabled)
-            {
-                Diagnostics.First("effect", $"effect:{picked.name}:{unit.Unit?.UniqueId}:{rank}",
-                    $"{Diagnostics.Describe(unit.Unit)} bonus '{picked.name}' reached rank " +
-                    $"{rank} (divisor {grant.Divisor}) — granted effect '{effectBp?.name ?? "<MISSING BLUEPRINT>"}', " +
-                    $"now rank {(effectBp != null ? unit.Progression.Features.GetRank(effectBp) : 0)}");
             }
         }
     }
@@ -379,26 +331,33 @@ namespace WOTRFavoredClass
         }
     }
 
-    // "Add +1/4 to the cavalier's banner bonus." Rather than adding a parallel bonus, this
-    // raises the number the banner already computes — which is what the tabletop line actually
-    // says, and the only thing that works: both banner effects apply their modifier with
-    // ModifierDescriptor.Morale, and same-descriptor bonuses do not stack, so a second component
-    // would be swallowed rather than added.
+    // Raises a number the game already computes, instead of adding a bonus beside it. Two
+    // entries need this, and both for the same reason: the tabletop line says "add to the
+    // bonus"/"add to the effective level", and a parallel bonus would either be swallowed by
+    // descriptor stacking or ignored entirely.
     //
-    // Both effects read one ContextRankConfig on the banner buff
-    // (SavingThrowBonusAgainstDescriptor computes Bonus.Calculate() + Value; ChargeAttackBonus
-    // uses Bonus alone), so a single number governs the whole banner. The rank is resolved
-    // against the buff's CASTER — ContextRankConfig.GetBaseValue opens by taking
-    // MechanicsContext.MaybeCaster — which is the cavalier even though the buff sits on an ally,
-    // and that is what makes the cavalier's own counter reachable from here.
+    //   Cavalier banner (+1/4). Both banner effects read ONE ContextRankConfig on the banner buff
+    //     (SavingThrowBonusAgainstDescriptor computes Bonus.Calculate() + Value; ChargeAttackBonus
+    //     uses Bonus alone), so a single number governs the whole banner. Both apply their
+    //     modifier with ModifierDescriptor.Morale, and same-descriptor bonuses do not stack.
+    //   Warpriest sacred weapon (+1/4 effective level). WarpriestSacredWeaponBuffBase carries a
+    //     ContextRankConfig of ClassLevel, feeding a ContextCalculateSharedValue that a
+    //     Conditional reads to apply the matching damage-tier buff. Raising the rank makes the
+    //     game's own conditional pick the higher tier. Granting a tier buff directly does NOT
+    //     work: SacredWeaponFavoriteDamageOverride tests the tiers in an if/else chain from 1d6
+    //     upward, so the lowest buff present wins and a higher one is never reached.
+    //
+    // In both cases the rank resolves against the CASTER — ContextRankConfig.GetBaseValue opens
+    // by taking MechanicsContext.MaybeCaster — which for the banner is the cavalier even though
+    // the buff sits on an ally, and that is what makes the owner's own counter reachable here.
     //
     // Cost: ContextRankConfig.GetValue has exactly one caller, MechanicsContext.RecalculateRanks,
     // so ranks are computed when a context is built or refreshed rather than per roll. The guard
-    // is a reference comparison against the one config cached at install, so every other rank
-    // config in the game pays a single failed reference compare.
+    // is a reference comparison against the handful of configs cached at install, so every other
+    // rank config in the game pays a few failed reference compares.
     [HarmonyPatch(typeof(Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig),
         nameof(Kingmaker.UnitLogic.Mechanics.Components.ContextRankConfig.GetValue))]
-    internal static class ContextRankConfig_GetValue_BannerPatch
+    internal static class ContextRankConfig_GetValue_RaisePatch
     {
         [HarmonyPostfix]
         static void Postfix(
@@ -406,34 +365,27 @@ namespace WOTRFavoredClass
             Kingmaker.UnitLogic.Mechanics.MechanicsContext context,
             ref int __result)
         {
-            var configs = FavoredClasses.BannerRankConfigs;
-            bool ours = false;
-            for (int i = 0; i < configs.Count; i++)
+            var raised = FavoredClasses.RaisedRankConfigs;
+            FavoredClasses.RaisedRankConfig entry = null;
+            for (int i = 0; i < raised.Count; i++)
             {
-                if (ReferenceEquals(configs[i], __instance)) { ours = true; break; }
+                if (ReferenceEquals(raised[i].Config, __instance)) { entry = raised[i]; break; }
             }
-            if (!ours) return;
+            if (entry == null) return;
 
             var caster = context?.MaybeCaster;
             if (caster == null) return;
             // The EFFECT feature, not the counter: one rank of it is granted at each divisor
             // threshold, so its rank is already the earned bonus and no division happens here.
             // Same division-of-labour as every other divisor entry.
-            var effect = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(FavoredClasses.BannerBonusEffectGuid);
+            var effect = BlueprintCore.Utils.BlueprintTool.Get<BlueprintFeature>(entry.EffectGuid);
             if (effect == null) return;
             int earned = caster.Descriptor?.Progression?.Features?.GetRank(effect) ?? 0;
             if (earned <= 0)
             {
-                if (Diagnostics.Enabled) Diagnostics.Tally("banner: rank config hit, caster has no earned bonus");
                 return;
             }
             __result += earned;
-            if (Diagnostics.Enabled)
-            {
-                Diagnostics.First("banner", "banner:" + caster.UniqueId,
-                    $"banner bonus raised for {Diagnostics.Describe(caster)}: base {__result - earned} + {earned} = {__result}");
-                Diagnostics.Tally("banner: bonus applied");
-            }
         }
     }
 
