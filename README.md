@@ -74,12 +74,6 @@ degrades gracefully without them (those specific bonus options simply won't be o
 - [Swashbuckler](https://github.com/novumvita/SwashbucklerWOTR) (Panache / Charmed Life bonuses)
 - [MicroscopicContentExpansion](https://github.com/alterasc/MicroscopicContentExpansion) (Antipaladin cruelty bonus)
 
-## Uninstalling cleanly
-
-The mod's in-game menu (Unity Mod Manager overlay) has a **"Strip all Favored Class data from
-loaded save"** button. Load your save, press it, then save again — saves made after that no
-longer reference this mod and load fine without it.
-
 ## Reference material & credits
 
 - **[Holic75/KingmakerFavoredClass](https://github.com/Holic75/KingmakerFavoredClass)** — the
