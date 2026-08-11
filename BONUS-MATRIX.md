@@ -363,6 +363,33 @@ artifact. Summary by wave:
   - `WizardSchoolSelection` is deliberately **not** in the wizard list: despite the name it holds
     the OPPOSITION schools (`AddOppositionSchool`), which grant no powers. The real schools come
     from `SpecialistSchoolSelection` and `ThassilonianSchoolSelection`.
+  - **One card per POWER, not per feature that leads to it.** Several features share one
+    resource: a subdomain runs its parent's power (Lightning uses the Air domain's), the second
+    domain slot is a separate progression blueprint for the same domain, and every Thassilonian
+    school hands the wizard the ordinary specialist progression as well. Building a card per
+    feature offered a Thassilonian specialist TWO cards for his one school power — "Specialist
+    School — Evocation" and "Wrath (Evocation)", both feeding `ForceMissileResource`, with
+    nothing to tell them apart. The pool now groups by resource; the surviving card is seeded
+    from the first feature that reached it, so guids issued by earlier versions are kept and only
+    the later duplicates collapse. Where several features feed one card the prerequisite is the
+    vanilla `PrerequisiteFeaturesFromList` at `Amount = 1` — a feature prerequisite each would
+    AND them and the card would never appear at all. The card is named after the POWER rather
+    than the feature, which is the only naming that reads correctly for a subdomain.
+  - **Reading a `LocalizedString` is not safe by itself.** One that was never set renders as
+    `<null>`, and one whose key is absent from the loaded pack renders as `[unknown key: …]`.
+    Neither is empty, so an `IsNullOrEmpty` test lets both onto the card — which is exactly what
+    the cleric list looked like once the cards were named after the power. `LocalizedString.IsSet()`
+    is the test that rejects both: it looks the key up with `reportUnknown` off, and
+    `LocalizationPack.GetText` returns `""` rather than the placeholder in that mode. The card
+    name now walks feature display name → power name → the blueprint name made readable, so it
+    cannot come out null or unresolved whatever the data holds.
+  - **One card per DOMAIN, not per resource.** Grouping by resource still listed every domain
+    twice, because a domain has two of them: the ordinary resource and the separatist's, metered
+    2 + Wisdom against 3 + Wisdom. Both are real and both are needed, but they are the same domain
+    to the player, he can only ever hold one of the two, and side by side they were
+    indistinguishable. The cards are therefore grouped a second time by the name the player sees,
+    and each carries an `IncreaseResourceAmount` for every resource in its group — the component
+    is vanilla and repeatable, and a resource the character does not have never comes up.
   - **A selection's option can itself be a selection** — that is what made the wizard pool come
     out empty on the first attempt. `EnumerateSelectableFeatures` flattens recursively (depth ≤3),
     and `FindThreePlusStatResource` walks nested components (depth ≤4).

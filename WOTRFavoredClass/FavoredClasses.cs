@@ -3450,9 +3450,24 @@ namespace WOTRFavoredClass
         // excludes the Greater powers (a different pool) and anything level-scaled.
         private static void BuildPowerUsePickPool(string rewardGuid, string seed, string label, string[] selectionGuids)
         {
-            var picks = new List<Blueprint<BlueprintFeatureReference>>();
+            // ONE card per POWER, not per feature that leads to it. Several features share a
+            // single resource: a subdomain runs its parent's power (Lightning uses the Air
+            // domain's), the second domain slot has its own progression blueprint for the same
+            // domain, and every Thassilonian school hands the wizard the ordinary specialist
+            // progression as well. Building a card per feature therefore offered a Thassilonian
+            // specialist TWO cards for his one school power — "Specialist School — Evocation" and
+            // "Wrath (Evocation)" — feeding the same ForceMissileResource, with nothing on either
+            // to say which was which.
+            //
+            // So the walk groups by resource. The surviving card is seeded from the FIRST feature
+            // that reached that resource, which keeps the guids issued by earlier versions: the
+            // selections are listed with the ordinary one first, so a card built in v0.1.9 keeps
+            // its identity and only the later duplicates collapse into it.
+            var order = new List<BlueprintAbilityResource>();
+            var group = new Dictionary<BlueprintGuid, List<BlueprintFeature>>();
             var seen = new HashSet<BlueprintGuid>();
             var perSelection = new List<string>();
+
             foreach (var selGuid in selectionGuids)
             {
                 var sel = ResourcesLibrary.TryGetBlueprint<BlueprintFeatureSelection>(BlueprintGuid.Parse(selGuid));
@@ -3461,32 +3476,104 @@ namespace WOTRFavoredClass
                     perSelection.Add($"{selGuid}=NOT FOUND");
                     continue;
                 }
-                int before = picks.Count;
+                int contributed = 0;
                 foreach (var feature in EnumerateSelectableFeatures(sel, new HashSet<BlueprintGuid>(), 0))
                 {
                     if (!seen.Add(feature.AssetGuid)) continue;
                     var resource = FindPowerResource(feature);
                     if (resource == null) continue;
-
-                    var pickGuid = MergeIds(feature.AssetGuid.ToString(), seed);
-                    FeatureConfigurator.New($"ZFCWPowerUse{feature.name}", pickGuid)
-                        .SetDisplayName(LocalizationTool.CreateString($"ZFCW.PowerUse.{feature.name}.Name",
-                            $"Bonus Uses ({feature.Name})", tagEncyclopediaEntries: false))
-                        .SetDescription(LocalizationTool.CreateString($"ZFCW.PowerUse.{feature.name}.Desc",
-                            "Add one use per day of this power.", tagEncyclopediaEntries: false))
-                        .SetIcon(feature.Icon)
-                        .SetIsClassFeature(true)
-                        .SetRanks(10)
-                        // Only offered for a domain or school the character actually took.
-                        .AddPrerequisiteFeature(feature.AssetGuid.ToString())
-                        .AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
-                            c.m_Resource = resource.ToReference<BlueprintAbilityResourceReference>())
-                        .Configure();
-                    AllModGuids.Add(pickGuid);
-                    AllModBlueprintGuids.Add(BlueprintGuid.Parse(pickGuid));
-                    picks.Add(pickGuid);
+                    contributed++;
+                    if (!group.TryGetValue(resource.AssetGuid, out var features))
+                    {
+                        features = new List<BlueprintFeature>();
+                        group[resource.AssetGuid] = features;
+                        order.Add(resource);
+                    }
+                    features.Add(feature);
                 }
-                perSelection.Add($"{sel.name}={picks.Count - before}");
+                perSelection.Add($"{sel.name}={contributed}");
+            }
+
+            // Second grouping, by the name the PLAYER sees. Grouping by resource alone still left
+            // every domain listed twice, because a domain has two resources: the ordinary one and
+            // the separatist's, which is metered 2 + Wisdom instead of 3 + Wisdom. Both cards are
+            // real and both are needed — but they are the same domain to the player, he can only
+            // ever hold one of the two, and side by side they were indistinguishable.
+            //
+            // So one card per domain, carrying an IncreaseResourceAmount for EACH of that domain's
+            // resources. The component is vanilla and repeatable, and a resource the character
+            // does not have simply never comes up, so the extra one costs nothing.
+            var byTitle = new List<string>();
+            var titled = new Dictionary<string, (List<BlueprintFeature> Features, List<BlueprintAbilityResource> Resources)>();
+            foreach (var resource in order)
+            {
+                var features = group[resource.AssetGuid];
+                var first = features[0];
+
+                // Naming, in order of preference, and every step of it earned: the feature's own
+                // display name, then the power's, then the blueprint name made readable. Reading
+                // a LocalizedString is not safe by itself — an unset one renders as "<null>" and
+                // one whose key is missing from the pack renders as "[unknown key: …]", and both
+                // went straight onto the cards when this preferred the resource unconditionally.
+                // LocalizedString.IsSet() is the test that rejects both: it looks the key up with
+                // reportUnknown off and asks whether anything came back.
+                string title = FirstUsableName(first.m_DisplayName, resource.LocalizedName)
+                               ?? Readable(first.name);
+
+                if (!titled.TryGetValue(title, out var entry))
+                {
+                    entry = (new List<BlueprintFeature>(), new List<BlueprintAbilityResource>());
+                    titled[title] = entry;
+                    byTitle.Add(title);
+                }
+                entry.Features.AddRange(features);
+                entry.Resources.Add(resource);
+            }
+
+            var picks = new List<Blueprint<BlueprintFeatureReference>>();
+            int collapsed = 0;
+            foreach (var title in byTitle)
+            {
+                var (features, resources) = titled[title];
+                var first = features[0];
+                collapsed += features.Count - 1;
+
+                var pickGuid = MergeIds(first.AssetGuid.ToString(), seed);
+                var conf = FeatureConfigurator.New($"ZFCWPowerUse{first.name}", pickGuid)
+                    .SetDisplayName(LocalizationTool.CreateString($"ZFCW.PowerUse.{first.name}.Name",
+                        $"Bonus Uses ({title})", tagEncyclopediaEntries: false))
+                    .SetDescription(LocalizationTool.CreateString($"ZFCW.PowerUse.{first.name}.Desc",
+                        "Add one use per day of this power.", tagEncyclopediaEntries: false))
+                    .SetIcon(first.Icon != null ? first.Icon : resources[0].Icon)
+                    .SetIsClassFeature(true)
+                    .SetRanks(10);
+
+                foreach (var resource in resources)
+                {
+                    var reference = resource.ToReference<BlueprintAbilityResourceReference>();
+                    conf.AddComponent<Kingmaker.UnitLogic.FactLogic.IncreaseResourceAmount>(c =>
+                        c.m_Resource = reference);
+                }
+
+                // Only offered for a domain or school the character actually took. With several
+                // features feeding one card the test is "any of them", which is what the vanilla
+                // PrerequisiteFeaturesFromList expresses at Amount = 1 — a plain feature
+                // prerequisite per feature would AND them and the card would never appear.
+                if (features.Count == 1)
+                {
+                    conf.AddPrerequisiteFeature(first.AssetGuid.ToString());
+                }
+                else
+                {
+                    conf.AddPrerequisiteFeaturesFromList(
+                        features.Select(f => (Blueprint<BlueprintFeatureReference>)f.AssetGuid.ToString()).ToList(),
+                        amount: 1);
+                }
+                conf.Configure();
+
+                AllModGuids.Add(pickGuid);
+                AllModBlueprintGuids.Add(BlueprintGuid.Parse(pickGuid));
+                picks.Add(pickGuid);
             }
 
             FeatureSelectionConfigurator.For(rewardGuid)
@@ -3495,7 +3582,9 @@ namespace WOTRFavoredClass
             // Per selection, not just the total. A selection contributing 0 is how an archetype
             // that swaps the domain or school choice for its own goes missing — the card still
             // opens, it just never offers that character's actual domain. A total alone hides it.
-            Main.Log($"{label} power-use pick pool: {picks.Count} powers [{string.Join(", ", perSelection)}].");
+            // `collapsed` is how many duplicate cards the grouping removed.
+            Main.Log($"{label} power-use pick pool: {picks.Count} cards, {collapsed} duplicates folded in " +
+                $"[{string.Join(", ", perSelection)}].");
 
             // Not diagnostics but a real failure worth one line: an empty pool means the card
             // unfolds onto a selection with nothing in it, so the bonus can be taken once and
@@ -3504,6 +3593,39 @@ namespace WOTRFavoredClass
             {
                 Main.Log($"WARNING: {label} power-use pool is EMPTY; the reward card will offer nothing.");
             }
+        }
+
+
+        // A LocalizedString that was never set renders as "<null>", and one whose key is absent
+        // from the loaded pack renders as "[unknown key: …]". Neither is empty, so a plain
+        // IsNullOrEmpty test lets both through onto a card. IsSet() looks the key up with
+        // reportUnknown off and reports whether anything came back, which is the real question.
+        private static string FirstUsableName(params Kingmaker.Localization.LocalizedString[] candidates)
+        {
+            foreach (var candidate in candidates)
+            {
+                if (candidate == null || !candidate.IsSet()) continue;
+                string text = candidate.ToString();
+                if (!string.IsNullOrWhiteSpace(text)) return text;
+            }
+            return null;
+        }
+
+        // Last resort when nothing in the game data carries a usable name: the blueprint's own
+        // name, with the bookkeeping suffixes dropped and the camel case opened up, so a card
+        // reads "Air Domain" rather than "AirDomainProgressionSecondary".
+        private static string Readable(string blueprintName)
+        {
+            if (string.IsNullOrEmpty(blueprintName)) return "Power";
+            string trimmed = blueprintName;
+            foreach (var suffix in new[] { "Separatist", "Secondary", "Progression", "Feature", "Druid", "Base" })
+            {
+                if (trimmed.EndsWith(suffix) && trimmed.Length > suffix.Length)
+                {
+                    trimmed = trimmed.Substring(0, trimmed.Length - suffix.Length);
+                }
+            }
+            return System.Text.RegularExpressions.Regex.Replace(trimmed, "(?<=[a-z0-9])(?=[A-Z])", " ");
         }
 
         // Flattens a selection into the features a character can actually end up with. An option
